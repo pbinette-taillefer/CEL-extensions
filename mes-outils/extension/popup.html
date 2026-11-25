@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mes outils</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="popup.js"></script>
+  </head>
+
+  <body class="popup">
+    <main>
+      <header class="popup-header">
+        <span class="brand">
+          <img src="icons/icon48.png" width="26" height="26" alt="" />
+          Mes outils
+        </span>
+        <span id="status" class="badge" data-state="empty" role="status">Chargement…</span>
+      </header>
+      <div id="empty-panel" class="empty-panel" hidden>
+        <h1>Vos outils, à portée de main.</h1>
+        <p>Ajoutez un outil pour commencer.</p>
+      </div>
+      <div id="installed-panel" hidden></div>
+      <p id="permission-help" class="callout" hidden>
+        Vos outils nécessitent une autorisation.
+        <button type="button" class="inline-button" data-extension-details>Autoriser les scripts utilisateur</button>
+      </p>
+
+      <p id="target-help" class="callout" hidden>
+        L’accès aux sites de vos outils est nécessaire.
+        <button type="button" class="inline-button" data-restore-target>Autoriser les sites</button>
+      </p>
+      <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
+      <button type="button" id="configure" class="primary full-width">Ajouter un outil</button>
+      <p><a href="privacy.html" target="_blank" rel="noopener">Confidentialité</a></p>
+    </main>
+  </body>
+</html>

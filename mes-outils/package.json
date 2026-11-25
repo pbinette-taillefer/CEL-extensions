@@ -1,0 +1,12 @@
+{
+  "name": "mes-outils",
+  "version": "0.1.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node tests/run.mjs && python -B -m unittest discover -s tests -p \"test_*.py\"",
+    "package": "npm run check && npm test && python scripts/package.py",
+    "prepare:publication": "python scripts/prepare-publication.py"
+  }
+}

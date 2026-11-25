@@ -1,0 +1,4 @@
+.artifacts/
+extension/vendor/
+docs/archive/
+*.zip

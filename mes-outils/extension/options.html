@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mes outils · Configuration</title>
+    <link rel="icon" href="icons/icon48.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="options.js"></script>
+  </head>
+  <body>
+    <main class="page">
+      <header class="page-header">
+        <a class="brand" href="options.html">
+          <img src="icons/icon48.png" width="28" height="28" alt="" />
+          Mes outils
+        </a>
+        <span id="extension-version" class="muted"></span>
+      </header>
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+      <aside id="permission-help" class="callout" hidden>
+        <strong>Une autorisation pour commencer</strong>
+        <p>Autorisez les scripts utilisateur pour exécuter vos outils.</p>
+        <button type="button" class="secondary" data-extension-details>
+          Autoriser les scripts utilisateur
+        </button>
+      </aside>
+
+      <aside id="target-help" class="callout" hidden>
+        <strong>Autorisez l’accès aux sites de vos outils</strong>
+        <p>Votre outil a besoin de cet accès pour fonctionner.</p>
+        <button type="button" class="secondary" data-restore-target>Autoriser les sites</button>
+      </aside>
+      <div id="installed-panel" hidden></div>
+      <section id="install-panel" class="card install-panel" aria-labelledby="install-heading">
+        <h2 id="install-heading" tabindex="-1">Ajouter un outil</h2>
+        <form id="install-form">
+          <div class="field-heading">
+            <label class="field-label" for="script-url">Lien de l’outil</label>
+            <span id="url-trust" class="field-hint">
+              <span class="trust-asterisk" aria-hidden="true">*</span>
+              Utilisez uniquement un lien de confiance.
+            </span>
+          </div>
+          <div class="url-row">
+            <input
+              type="url"
+              id="script-url"
+              placeholder="https://…"
+              required
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="url-trust"
+            />
+            <button type="submit" class="primary" id="prepare">
+              Examiner
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </form>
+        <section id="preview" class="preview" hidden aria-labelledby="preview-name">
+          <span class="section-label">Prêt à installer</span>
+          <h2 id="preview-name" tabindex="-1"></h2>
+          <p id="preview-description"></p>
+          <dl class="preview-meta">
+            <div>
+              <dt>Version</dt>
+              <dd id="preview-version"></dd>
+            </div>
+            <div>
+              <dt>Pages autorisées</dt>
+              <dd id="preview-matches"></dd>
+            </div>
+            <div>
+              <dt>Source des mises à jour</dt>
+              <dd id="preview-source"></dd>
+            </div>
+          </dl>
+          <p>
+            Cet outil pourra modifier les pages indiquées et recevoir ses mises à jour depuis cette
+            source.
+            <span id="replacement-note" hidden>
+              L’outil provenant de cette adresse sera remplacé.
+            </span>
+          </p>
+          <p>L’outil s’exécute après le chargement du DOM et la vérification de son autorisation (document-idle).</p>
+          <div class="actions">
+            <button type="button" id="confirm-install" class="primary">
+              Confirmer l’installation
+            </button>
+            <button type="button" id="cancel-install" class="text-button">Annuler</button>
+          </div>
+        </section>
+      </section>
+      <footer><a href="privacy.html" target="_blank" rel="noopener">Politique de confidentialité</a></footer>
+    </main>
+  </body>
+</html>

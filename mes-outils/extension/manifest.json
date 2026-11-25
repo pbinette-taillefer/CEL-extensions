@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Mes outils",
+  "version": "0.1.2",
+  "description": "Gérez vos outils JavaScript : installation confirmée, activation et vérification horaire des mises à jour à approuver.",
+  "minimum_chrome_version": "138",
+  "permissions": [
+    "storage",
+    "alarms",
+    "userScripts"
+  ],
+  "host_permissions": [],
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Mes outils",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"
+  }
+}
