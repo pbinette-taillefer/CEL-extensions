@@ -18,6 +18,10 @@ if not (vendor / "tinymce.min.js").is_file():
 class Handler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         path = unquote(urlparse(path).path)
+        if path == "/editor/catalogue.json":
+            return str(ROOT / "tests/fixtures/catalogue.json")
+        if path == "/editor.css":
+            return str(ROOT / "tests/fixtures/editor.css")
         base = vendor if path.startswith("/tinymce/") else ROOT
         relative = path.removeprefix("/tinymce/") if base == vendor else path.lstrip("/") or "demo.html"
         target = (base / relative).resolve()

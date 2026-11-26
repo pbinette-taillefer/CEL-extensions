@@ -33,7 +33,7 @@ try {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/options.html`);
   await page.waitForFunction(() => document.getElementById("permission-help").hidden);
-  const tool = resolve("../scripts/d2l/composants/composants-cel.user.js");
+  const tool = resolve("../scripts/d2l/composants/dist/composants-cel.user.js");
   await page.locator("#advanced-options summary").click();
   await page.locator("#script-file").setInputFiles(tool);
   await page.locator("#prepare-local").click();

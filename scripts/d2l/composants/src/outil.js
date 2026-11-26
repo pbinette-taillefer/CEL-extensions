@@ -1,36 +1,23 @@
 (() => {
   if (window.__celComponentsPrototype) return;
-  const CATALOG = /* CEL_CATALOG */ null;
+  /* CEL_CATALOG_SERVICE */
+  const catalogCache = new Map();
+  let stopped = false;
+  async function catalogFor(editor) {
+    const key = JSON.stringify(editor.urls);
+    if (!catalogCache.has(key)) {
+      const promise = courseCatalogUrl(editor.urls).then(fetchCatalogJson).then(validateCatalog);
+      catalogCache.set(key, promise);
+      promise.catch(() => catalogCache.delete(key));
+    }
+    return catalogCache.get(key);
+  }
   const REQUEST = "mes-outils:tinymce:request";
   const RESPONSE = "mes-outils:tinymce:response";
+  const CHANGED = "mes-outils:tinymce:changed";
   const pending = new Map();
   let toolbar;
-  const labels = {
-    "med-nbsp": "Espace insécable", "med-artefact": "Document Office", "med-artefact-pdf": "Document PDF",
-    "med-boite": "Boîte", "med-forum": "Forum", "med-fullimg": "Image plein écran",
-    "med-h5p": "Activité H5P", "med-ifram": "Intégration iframe", "med-jwplayer": "Lecteur JWPlayer",
-    "med-medialink": "Carte de ressource", "med-mediaimage-image": "Image et texte",
-    "med-mediaimage-video": "Vidéo et texte", "med-modal": "Bouton et fenêtre modale",
-    "med-grid-left": "Colonnes 1/3 – 2/3", "med-grid-right": "Colonnes 2/3 – 1/3",
-    "med-grid-equal": "Colonnes 1/2 – 1/2", "med-grid-triple": "Trois colonnes",
-    "med-storyline": "Activité Storyline", "med-tableau": "Tableau",
-  };
-  const select = (attribute, label, options) => ({ attribute, label, type: "select", options });
-  const bool = (attribute, label) => select(attribute, label, [["true", "Oui"], ["false", "Non"]]);
-  const fullscreen = bool("data-prop-fullscreen", "Activer le plein écran");
-  // UI labels and editable subset; HTML remains sourced from the shared catalog.
-  const fields = {
-    artefact: [select("data-prop-type", "Type de document", ["docx", "xlsx", "pptx", "pdf"])],
-    fullimg: [fullscreen],
-    grid: [select("data-prop-type", "Disposition", [["left", "1/3 – 2/3"], ["right", "2/3 – 1/3"], ["equal", "1/2 – 1/2"], ["triple", "Trois colonnes"]])],
-    ifram: [fullscreen],
-    jwplayer: [bool("data-prop-hidedescription", "Masquer la description"), bool("data-prop-forcevideoplayer", "Forcer le lecteur vidéo")],
-    mediaimage: [select("data-prop-media-position", "Position du média", [["left", "Gauche"], ["right", "Droite"]]),
-      select("data-prop-media-size", "Largeur du média", ["1/3", "1/2", "2/3"]), fullscreen],
-    modalbox: [select("data-prop-size", "Largeur de la fenêtre", [["max-w-lg", "Petite"], ["max-w-3xl", "Moyenne"], ["max-w-7xl", "Grande"]]),
-      select("data-prop-titletag", "Niveau du titre", ["h2", "h3", "h4", "h5", "h6"])],
-    storyline: [select("data-prop-aspectratio", "Ratio", ["16/9", "4/3", "1/1"]), fullscreen],
-  };
+
 
   function rpc(op, data = {}) {
     const id = crypto.randomUUID();
@@ -78,36 +65,39 @@
   function propsOf(node) {
     return Object.fromEntries([...node.attributes].filter((attr) => attr.name.startsWith("data-prop-")).map((attr) => [attr.name, attr.value]));
   }
-  function modelFor(key) {
+  function modelFor(entry) {
     const template = document.createElement("template");
-    const modalId = crypto.randomUUID();
-    template.innerHTML = key === "med-modal"
-      ? `${CATALOG["med-modalbtn"].html}${CATALOG["med-modalbox"].html}` : CATALOG[key].html;
-    for (const node of template.content.querySelectorAll('[data-prop-modalid]')) node.setAttribute("data-prop-modalid", modalId);
+    template.innerHTML = entry.html;
+    if (template.content.querySelector("script, iframe, object, embed") ||
+        [...template.content.querySelectorAll("*")].some((node) => [...node.attributes].some((attr) =>
+          /^on/i.test(attr.name) || /^(href|src|action)$/i.test(attr.name) && /^\s*javascript:/i.test(attr.value))))
+      throw new Error("Le fragment du catalogue contient du HTML actif interdit.");
+    for (const attribute of entry.uniqueAttributes || []) {
+      const id = crypto.randomUUID();
+      for (const node of template.content.querySelectorAll(`[${attribute}]`)) node.setAttribute(attribute, id);
+    }
     for (const slot of template.content.querySelectorAll("span[data-slot].mceEditable")) {
       slot.setAttribute("data-placeholder", "\u00a0");
       if (!slot.children.length && !slot.textContent.trim()) slot.textContent = "\u00a0";
     }
     return template;
   }
-  function definitionFor(name, props, editing) {
-    return (fields[name] || []).map((field) => {
-      if (!editing || field.attribute !== "data-prop-type") return field;
-      if (name === "grid") return { ...field, options: field.options.filter((option) => (option[0] === "triple") === (props[field.attribute] === "triple")) };
-      if (name === "artefact") return { ...field, options: field.options.filter((option) => (option === "pdf") === (props[field.attribute] === "pdf")) };
-      return field;
-    });
+  function targetFor(model, entry) {
+    const target = [...model.content.querySelectorAll("[data-component]")].find((node) =>
+      node.dataset.component === entry.name && (node.dataset.componentType || "site") === entry.type);
+    if (!target) throw new Error("Le fragment ne contient pas le composant attendu.");
+    return target;
   }
-  function renderFields(container, name, props, editing) {
+  function renderFields(container, definition, props, editing) {
     container.replaceChildren();
     const controls = [];
-    for (const field of definitionFor(name, props, editing)) {
+    for (const field of fieldsFor(definition, props)) {
       const label = element("label", field.label);
       const control = element(field.type === "select" ? "select" : "input");
       control.dataset.prop = field.attribute;
       const current = props[field.attribute];
       if (field.type === "select") {
-        control.append(element("option", "Valeur par défaut du composant", { value: "" }));
+        if (field.allowDefault !== false) control.append(element("option", "Valeur par défaut du composant", { value: "" }));
         for (const option of field.options) {
           const [value, title] = Array.isArray(option) ? option : [option, option.toUpperCase()];
           control.append(element("option", title, { value }));
@@ -121,7 +111,7 @@
       controls.push(control);
     }
     if (!controls.length) container.append(element("p", "Ce composant n’a pas d’options modifiables dans ce prototype. Son contenu se modifie directement dans l’éditeur.", { class: "note" }));
-    if (editing && ["grid", "artefact", "mediaimage"].includes(name)) container.append(element("p", "Le changement du nombre de colonnes, du format PDF ou du type de média se fait en insérant un nouveau composant.", { class: "note" }));
+    if (editing && definition?.editNote) container.append(element("p", definition.editNote, { class: "note" }));
     return () => Object.fromEntries(controls.map((control) => [control.dataset.prop, control.value || null]));
   }
 
@@ -151,10 +141,43 @@
     dialog.append(form);
     details.append(summary, menu);
     details.addEventListener("toggle", () => { if (details.open) menu.scrollTop = 0; });
-    bar.append(details, edit, element("span", "Prototype · MED", { class: "badge" }), status);
+    bar.append(details, edit, element("span", "Composants du cours", { class: "badge" }), status);
+    // Keep TinyMCE's object selection until the menu captures its bookmark.
+    bar.addEventListener("mousedown", (event) => {
+      if (event.button === 0 && event.target.closest("button, summary")) event.preventDefault();
+    });
     root.append(bar, dialog);
-    let session, model, editing = false, returnToEditor = false, readProps = () => ({}), choices = [];
+    let catalog, entry, session, model, editing = false, returnToEditor = false, readProps = () => ({}), choices = [];
     function notice(message, failed = false) { status.textContent = message; status.classList.toggle("error", failed); }
+    function definitionFor(component) {
+      return catalog?.components.find((item) => item.type === component.type && item.name === component.name);
+    }
+    let loading;
+    function load() {
+      if (loading) return loading;
+      edit.disabled = true;
+      notice("Chargement du catalogue du cours…");
+      loading = catalogFor(editor).then((value) => {
+        if (stopped || !host.isConnected) return;
+        catalog = value;
+        menu.replaceChildren();
+        for (const item of catalog.entries) {
+          const button = element("button", item.label, { type: "button" });
+          button.addEventListener("click", () => open(item));
+          menu.append(button);
+        }
+        if (!catalog.entries.length) menu.append(element("p", "Aucun composant proposé dans ce cours."));
+        edit.disabled = false;
+        notice("");
+      }).catch((failure) => {
+        notice(failure.message, true);
+        menu.replaceChildren();
+        const retry = element("button", "Réessayer le chargement", { type: "button" });
+        retry.addEventListener("click", load);
+        menu.append(retry);
+      }).finally(() => { loading = null; });
+      return loading;
+    }
     function close() { if (dialog.open) dialog.close(); }
     dialog.addEventListener("close", () => {
       if (session) rpc("release", { token: session.token }).catch(() => {});
@@ -167,24 +190,26 @@
     function redraw() {
       const component = choices[Number(componentSelect.value) || 0];
       if (!component) return;
-      heading.textContent = `${editing ? "Options" : "Insérer"} · ${component.name}`;
-      readProps = renderFields(fieldContainer, component.name, component.props, editing);
-      submit.hidden = editing && !(fields[component.name]?.length);
+      const definition = definitionFor(component);
+      heading.textContent = `${editing ? "Options" : "Insérer"} · ${editing ? definition?.label || component.name : entry.label}`;
+      readProps = renderFields(fieldContainer, definition, component.props, editing);
+      submit.hidden = editing && !(definition?.fields.length);
     }
     componentSelect.addEventListener("change", redraw);
-    async function open(key) {
+    async function open(selectedEntry) {
       if (dialog.open || session) return;
       details.open = false;
-      editing = !key;
+      editing = !selectedEntry;
+      entry = selectedEntry;
       try {
         session = await rpc("capture", { editorId: editor.id });
         if (editing) {
           choices = session.components;
           if (!choices.length) throw new Error("Placez le curseur dans un composant CEL pour modifier ses options.");
         } else {
-          model = modelFor(key);
-          const node = key === "med-modal" ? model.content.querySelector('[data-component="modalbox"]') : model.content.firstElementChild;
-          choices = [{ name: node.getAttribute("data-component"), props: propsOf(node) }];
+          model = modelFor(entry);
+          const node = targetFor(model, entry);
+          choices = [{ name: entry.name, type: entry.type, props: propsOf(node) }];
         }
         componentSelect.replaceChildren(...choices.map((component, index) => element("option", component.name, { value: String(index) })));
         componentLabel.hidden = !editing || choices.length < 2;
@@ -198,11 +223,6 @@
         session = null;
       }
     }
-    for (const [key, title] of Object.entries(labels)) {
-      const button = element("button", title, { type: "button" });
-      button.addEventListener("click", () => open(key));
-      menu.append(button);
-    }
     edit.addEventListener("click", () => open());
     root.addEventListener("keydown", (event) => { if (event.key === "Escape" && !dialog.open) { details.open = false; summary.focus(); } });
     form.addEventListener("submit", async (event) => {
@@ -215,7 +235,7 @@
           const component = choices[Number(componentSelect.value) || 0];
           await rpc("update", { token: session.token, index: component.index, props });
         } else {
-          const node = choices[0].name === "modalbox" ? model.content.querySelector('[data-component="modalbox"]') : model.content.firstElementChild;
+          const node = targetFor(model, entry);
           for (const [key, value] of Object.entries(props)) {
             if (value === null) node.removeAttribute(key);
             else node.setAttribute(key, value);
@@ -229,19 +249,23 @@
       finally { submit.disabled = false; }
     });
     document.body.append(host);
-    return { host, editor, mount: () => rpc("mount", { editorId: editor.id, hostId: host.id }), close,
+    return { host, editor, mount: async () => { await rpc("mount", { editorId: editor.id, hostId: host.id }); load(); }, close,
       setState(state) {
         host.hidden = state.readonly || state.fullscreen;
         if (host.hidden) { close(); details.open = false; }
       } };
   }
-  let scanning = false;
+  const startupUntil = Date.now() + 10_000;
+  let scanning = false, rescan = false, timer;
   async function scan() {
-    if (scanning) return;
+    if (stopped) return;
+    if (scanning) { rescan = true; return; }
+    clearTimeout(timer);
     scanning = true;
     try {
       const editor = await rpc("state");
-      if (toolbar && (!editor?.compatible || editor.key !== toolbar.editor.key)) {
+      if (stopped) return;
+      if (toolbar && (!editor?.compatible || editor.key !== toolbar.editor.key || JSON.stringify(editor.urls) !== JSON.stringify(toolbar.editor.urls))) {
         toolbar.close(); toolbar.host.remove(); toolbar = null;
       }
       if (!editor?.compatible) return;
@@ -253,11 +277,18 @@
       }
       toolbar.setState(editor);
     } catch (failure) { console.warn("Composants CEL :", failure.message); }
-    finally { scanning = false; }
+    finally {
+      scanning = false;
+      if (!stopped) timer = setTimeout(scan, rescan ? 0 : !toolbar && Date.now() < startupUntil ? 100 : 1500);
+      rescan = false;
+    }
   }
-  const timer = setInterval(scan, 1500);
+  window.addEventListener(CHANGED, scan);
   window.__celComponentsPrototype = { stop() {
-    clearInterval(timer);
+    stopped = true;
+    clearTimeout(timer);
+    window.removeEventListener(CHANGED, scan);
+    catalogCache.clear();
     if (toolbar) { toolbar.close(); toolbar.host.remove(); toolbar = null; }
     window.removeEventListener(RESPONSE, receive);
     for (const task of pending.values()) { clearTimeout(task.timer); task.reject(new Error("Outil arrêté.")); }
