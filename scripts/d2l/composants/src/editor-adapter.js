@@ -13,7 +13,7 @@
   function watchEditor(editor) {
     if (!editor || watchedEditors.has(editor)) return;
     watchedEditors.add(editor);
-    editor.on("init remove SwitchMode FullscreenStateChanged", notifyChange);
+    editor.on("init remove SwitchMode FullscreenStateChanged NodeChange SelectionChange SetContent Undo Redo focus", notifyChange);
   }
   function editorAdded(event) { watchEditor(event.editor); }
   function watchManager() {
@@ -108,12 +108,23 @@
         throw new Error("Option de composant invalide.");
     }
   }
+  function selectedComponents(editor) {
+    const nodes = [];
+    const body = editor.getBody();
+    let node = editor.selection.getNode();
+    while (node && node !== body && body.contains(node)) {
+      if (node.nodeType === 1 && node.matches("[data-component]")) nodes.push(node);
+      node = node.parentElement;
+    }
+    return nodes;
+  }
   const actions = {
     state() {
       watchManager();
       const editor = (window.tinymce?.get() || []).find((editor) => editor.initialized && !editor.removed);
       if (editor !== currentEditor) { currentEditor = editor; editorKey++; }
       return editor ? { id: editor.id, key: editorKey, ...pageInfo(editor),
+        hasSelectedComponent: !!selectedComponents(editor).length,
         readonly: !!editor.mode?.isReadOnly(),
         fullscreen: !!editor.plugins?.fullscreen?.isFullscreen() } : null;
     },
@@ -133,13 +144,7 @@
     capture({ editorId }) {
       const editor = editorFor(editorId);
       writable(editor);
-      const nodes = [];
-      const body = editor.getBody();
-      let node = editor.selection.getNode();
-      while (node && node !== body && body.contains(node)) {
-        if (node.nodeType === 1 && node.matches("[data-component]")) nodes.push(node);
-        node = node.parentElement;
-      }
+      const nodes = selectedComponents(editor);
       const token = crypto.randomUUID();
       // Simple bookmarks don't insert marker elements in the saved document.
       const bookmark = editor.selection.getBookmark(2, true);

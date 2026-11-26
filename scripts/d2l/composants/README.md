@@ -2,7 +2,9 @@
 
 Outil pour le WYSIWYG de `https://cforp.desire2learn.com/` :
 
-- dropdown **Composants CEL** juste au-dessus de l’unique éditeur de la page Handlebars;
+- barre compacte **Ajouter · Options** juste au-dessus de l’unique éditeur de la page Handlebars;
+- recherche de composants insensible aux accents, navigation au clavier et fermeture par Échap ou clic extérieur;
+- favoris accessibles directement dans la barre et conservés dans le navigateur;
 - choix d’insertion chargés depuis `editor/catalogue.json` dans les fichiers du cours;
 - formulaire **Options du composant…**, y compris depuis un slot ou un composant imbriqué;
 - conservation du contenu des slots et des props non exposées;
@@ -23,7 +25,7 @@ l’insertion (notamment l’identifiant H5P et le MAM ID Storyline).
 3. Examiner l’aperçu **Contexte de la page**, confirmer et autoriser le domaine D2L.
 4. Actualiser la page D2L après avoir enregistré le travail en cours.
 
-Le domaine d’exécution est limité à `cforp.desire2learn.com`. Le script 0.4.3 déclare
+Le domaine d’exécution est limité à `cforp.desire2learn.com`. Le script 0.6.1 déclare
 `@inject-into page` et contient son propre adaptateur TinyMCE. Mes outils reste
 générique. Pour modifier la copie locale, réimporter le fichier; le disque n’est pas
 surveillé. L’ajout par URL HTTPS directe reste disponible pour une distribution CDN.
@@ -234,3 +236,54 @@ entier dans TinyMCE. Les 7 tests ciblés et les 22 scénarios Chromium passent,
 dont la conservation du texte, de plusieurs paragraphes sélectionnés à rebours et
 d’un composant entier, avec annulation et rétablissement. Réimporter
 `dist/composants-cel.user.js` dans Mes outils, puis actualiser D2L.
+
+Version **0.5.0** : interface allégée, fond blanc et bordures neutres accordés au
+WYSIWYG, petite signature CEL bleue et boutons Ajouter / Options avec icônes.
+Le menu propose une recherche sans accents, un état sans résultat et une navigation
+avec les flèches; Entrée ouvre l’unique résultat et Échap rend le focus au bouton.
+La sélection TinyMCE est conservée dès l’ouverture du menu, y compris pendant la
+recherche. Les formulaires affichent les noms lisibles des composants, un bouton
+de fermeture et une action principale bleue. Les confirmations disparaissent
+après six secondes; les erreurs restent visibles.
+
+Validation locale : 7 tests du catalogue et 23 scénarios Chromium réussis avec
+TinyMCE 8.4.0, dont la recherche, le clavier, l’affichage à 320 px et l’insertion
+avant une sélection de texte ou de composant après recherche. Contrôles Mes outils :
+33 tests JavaScript et 3 tests Python réussis. Réimporter le script généré dans
+Mes outils, puis actualiser D2L. L’intégration dans un cours D2L réel reste à vérifier.
+
+Version **0.5.1** : retrait du repère CEL de la barre et des en-têtes des
+formulaires. Le bouton Options est désactivé lorsque le curseur ne se trouve pas
+dans un composant; il devient disponible dans le composant ou ses slots, y compris
+les composants imbriqués. Son état suit les changements de sélection TinyMCE.
+Les 7 tests du catalogue et les 24 scénarios Chromium passent. Réimporter le script
+généré dans Mes outils, puis actualiser D2L.
+
+Version **0.5.2** : les composants sans options configurables sont insérés
+directement au choix dans le menu, sans fenêtre intermédiaire. Les composants
+avec options conservent leur formulaire. L’insertion directe garde la sélection,
+rend le focus à l’éditeur et s’annule avec Ctrl+Z. Les 7 tests du catalogue et les
+25 scénarios Chromium passent, y compris les 19 entrées du catalogue.
+
+Version **0.6.0** : une étoile à droite de chaque composant dans le menu Ajouter
+permet de l’ajouter aux favoris ou de le retirer. Les favoris apparaissent comme
+boutons dans la barre et utilisent le même parcours d’insertion : ajout direct
+sans options, formulaire sinon. Le menu conserve toutes les entrées pour gérer
+les étoiles. La barre revient à la ligne sur les petits écrans.
+
+Les favoris sont stockés localement dans ce navigateur pour le domaine D2L, sans
+modifier le contenu du cours. Ils sont partagés entre les onglets et retrouvés au
+rechargement. Seuls les favoris disponibles dans le catalogue du cours courant
+sont affichés; les préférences des autres composants sont conservées. Supprimer
+les données du site efface ces préférences.
+
+Validation : 7 tests du catalogue et 26 scénarios Chromium réussis, dont l’ajout
+et le retrait des favoris au clavier, leur persistance, les raccourcis avec ou
+sans options, Ctrl+Z, le retour du focus, l’affichage à 320 px et le changement de
+catalogue. Réimporter le script généré dans Mes outils, puis actualiser D2L.
+
+Version **0.6.1** : barre bleu pâle avec un fin accent bleu, bouton Ajouter bleu
+et favoris sous forme de boutons blancs sans étoile. Options est aligné à droite;
+sur petit écran, les favoris occupent une ligne sous les actions. Les étoiles du
+menu Ajouter servent toujours à gérer les favoris. Les 7 tests du catalogue et
+26 scénarios Chromium passent; captures vérifiées sur ordinateur et à 320 px.

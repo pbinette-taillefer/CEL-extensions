@@ -29,7 +29,7 @@ def build(catalog_dir=None, domain="https://cforp.desire2learn.com"):
     header = f"""// ==UserScript==
 // @name Composants CEL — prototype
 // @namespace cel
-// @version 0.4.3
+// @version 0.6.1
 // @description Insérer et modifier les composants du catalogue propre au cours D2L.
 // @match https://{address.hostname}/*
 // @grant none

@@ -127,7 +127,7 @@ try {
   assert.equal(sourceState.compatible, false, "un autre template dans le document source est refusé");
   await sourceDocumentPage.close();
   results.push("Document HTML complet : signature du body source reconnue sans ajout artificiel au body TinyMCE");
-  assert.equal(await toolbar.locator(".badge").textContent(), "Composants du cours");
+  assert.equal(await toolbar.locator(".badge").count(), 0);
   const detection = await page.evaluate(async () => {
     const request = (op, data = {}) => new Promise((resolve) => {
       const id = crypto.randomUUID();
@@ -181,7 +181,7 @@ try {
   assert.equal(detection.state.courseCode, "PROBE");
   const probeToolbar = toolbar;
   await probeToolbar.waitFor();
-  assert.equal(await probeToolbar.locator(".badge").textContent(), "Composants du cours");
+  assert.equal(await probeToolbar.locator(".badge").count(), 0);
   await page.evaluate(() => tinymce.get("demo-editor").getBody().dataset.celTemplate = "other");
   await probeToolbar.waitFor({ state: "detached" });
   await page.evaluate(() => tinymce.get("demo-editor").getBody().dataset.celTemplate = "handlebars");
@@ -202,15 +202,124 @@ try {
   async function end(id = "demo-editor") {
     await page.evaluate((id) => { const editor = tinymce.get(id); editor.focus(); editor.selection.select(editor.getBody(), true); editor.selection.collapse(false); }, id);
   }
+  const fixtureCatalog = JSON.parse(await readFile(resolve(root, "tests/fixtures/catalogue.json"), "utf8"));
   async function insert(label, configure, target = toolbar) {
     await target.locator("summary").click();
     await target.getByRole("button", { name: label, exact: true }).click();
+    const entry = fixtureCatalog.entries.find((entry) => entry.label === label);
+    const definition = fixtureCatalog.components.find((item) => item.name === entry?.name && item.type === entry?.type);
+    if (!definition?.fields.length) {
+      assert.equal(configure, undefined);
+      await target.locator(".status").filter({ hasText: "Composant inséré." }).waitFor();
+      assert.equal(await target.locator("dialog[open]").count(), 0);
+      return;
+    }
     await target.locator("dialog[open]").waitFor();
     if (configure) await configure(target);
     await target.getByRole("button", { name: "Insérer", exact: true }).click();
     await target.locator("dialog").waitFor({ state: "hidden" });
   }
   const content = () => page.evaluate(() => tinymce.get("demo-editor").getContent());
+  const optionsButton = toolbar.getByRole("button", { name: "Options du composant…", exact: true });
+  await optionsButton.locator(":scope:disabled").waitFor();
+  await page.evaluate(() => {
+    const editor = tinymce.get("demo-editor");
+    editor.setContent('<div data-component="fullimg" data-component-type="med" class="mceNonEditable"><span data-slot="da" class="mceEditable">Description</span></div><p>Après</p>');
+    editor.focus();
+    editor.selection.select(editor.getBody().querySelector('[data-slot="da"]'), true);
+    editor.selection.collapse(false);
+    editor.nodeChanged();
+  });
+  await optionsButton.locator(":scope:enabled").waitFor();
+  await optionsButton.click();
+  await toolbar.getByRole("button", { name: "Fermer", exact: true }).click();
+  await end();
+  await optionsButton.locator(":scope:disabled").waitFor();
+  await page.evaluate(() => tinymce.get("demo-editor").setContent('<p>Placez le curseur ici pour insérer un composant.</p>'));
+  results.push("Options désactivé hors composant, activé dans un slot et désactivé en quittant le composant; repère CEL retiré");
+  await end();
+  await toolbar.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  const search = toolbar.getByRole("searchbox", { name: "Rechercher un composant" });
+  await search.fill("ECRAN");
+  assert.deepEqual(await toolbar.locator(".menu-list button[data-entry]:visible").allTextContents(), ["Image plein écran"]);
+  await search.fill("introuvable");
+  await toolbar.getByText("Aucun composant trouvé.", { exact: true }).waitFor();
+  await search.fill("image");
+  await search.press("ArrowDown");
+  assert.equal(await toolbar.locator(".menu-list button:visible").first().evaluate((node) => node === node.getRootNode().activeElement), true);
+  await page.keyboard.press("Escape");
+  await toolbar.locator('summary[aria-expanded="false"]').waitFor();
+  assert.equal(await toolbar.locator("summary").getAttribute("aria-expanded"), "false");
+  assert.equal(await toolbar.locator("summary").evaluate((node) => node === node.getRootNode().activeElement), true);
+  await toolbar.locator("summary").click();
+  assert.equal(await search.inputValue(), "");
+  await page.screenshot({ path: resolve(artifacts, "menu.png"), fullPage: true });
+  await page.locator("h1").click();
+  await toolbar.locator("details:not([open])").waitFor();
+  await page.setViewportSize({ width: 320, height: 740 });
+  await toolbar.locator("summary").click();
+  const bounds = await toolbar.locator(".menu").boundingBox();
+  assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 320, "menu contenu dans une fenêtre de 320 px");
+  await page.screenshot({ path: resolve(artifacts, "menu-mobile.png"), fullPage: true });
+  await toolbar.getByRole("button", { name: "Image plein écran", exact: true }).click();
+  const dialogBounds = await toolbar.locator("dialog").boundingBox();
+  assert.ok(dialogBounds.x >= 0 && dialogBounds.x + dialogBounds.width <= 320);
+  await page.screenshot({ path: resolve(artifacts, "dialog-mobile.png"), fullPage: true });
+  await toolbar.getByRole("button", { name: "Fermer", exact: true }).click();
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.screenshot({ path: resolve(artifacts, "toolbar.png"), fullPage: true });
+  results.push("Interface compacte : recherche sans accents, état vide, navigation au clavier, Échap, clic extérieur et affichage à 320 px");
+  const favoritePage = await context.newPage();
+  await favoritePage.goto("https://cforp.desire2learn.com/prototype/");
+  const favoriteToolbar = favoritePage.locator('[data-cel-editor-id="demo-editor"]');
+  const shortcuts = favoriteToolbar.getByRole("group", { name: "Composants favoris", exact: true });
+  await favoriteToolbar.locator("summary").click();
+  const beforePin = await favoritePage.evaluate(() => tinymce.get("demo-editor").getContent());
+  await favoriteToolbar.getByRole("button", { name: "Ajouter aux favoris : Boîte", exact: true }).click();
+  await shortcuts.getByRole("button", { name: "Boîte", exact: true }).waitFor();
+  assert.equal(await favoriteToolbar.getByRole("button", { name: "Retirer des favoris : Boîte", exact: true }).getAttribute("aria-pressed"), "true");
+  assert.equal(await favoritePage.evaluate(() => tinymce.get("demo-editor").getContent()), beforePin);
+  await favoriteToolbar.getByRole("searchbox").fill("plein ecran");
+  await favoriteToolbar.getByRole("button", { name: "Ajouter aux favoris : Image plein écran", exact: true }).click();
+  await favoritePage.reload();
+  await shortcuts.getByRole("button", { name: "Boîte", exact: true }).waitFor();
+  await shortcuts.getByRole("button", { name: "Image plein écran", exact: true }).waitFor();
+  await favoritePage.evaluate(() => {
+    const editor = tinymce.get("demo-editor");
+    editor.focus(); editor.selection.select(editor.getBody(), true); editor.selection.collapse(false);
+  });
+  await shortcuts.getByRole("button", { name: "Boîte", exact: true }).click();
+  await favoriteToolbar.locator(".status").filter({ hasText: "Composant inséré." }).waitFor();
+  assert.equal(await favoriteToolbar.locator("dialog[open]").count(), 0);
+  assert.match(await favoritePage.evaluate(() => tinymce.get("demo-editor").getContent()), /data-component="boite-sans-creator"/);
+  await favoritePage.waitForFunction(() => document.activeElement === tinymce.get("demo-editor").iframeElement);
+  await favoritePage.keyboard.press("ControlOrMeta+Z");
+  assert.equal(await favoritePage.evaluate(() => tinymce.get("demo-editor").getContent()), beforePin);
+  await shortcuts.getByRole("button", { name: "Image plein écran", exact: true }).click();
+  await favoriteToolbar.locator("dialog[open]").waitFor();
+  await favoriteToolbar.getByRole("button", { name: "Annuler", exact: true }).click();
+  await favoritePage.waitForFunction(() => {
+    const root = document.querySelector('[data-cel-components-toolbar]').shadowRoot;
+    return !!root.activeElement?.closest(".favorites");
+  });
+  await favoritePage.setViewportSize({ width: 320, height: 740 });
+  const favoriteBounds = await shortcuts.boundingBox();
+  assert.ok(favoriteBounds.x >= 0 && favoriteBounds.x + favoriteBounds.width <= 320);
+  await favoritePage.screenshot({ path: resolve(artifacts, "favorites-mobile.png"), fullPage: true });
+  await favoritePage.setViewportSize({ width: 1280, height: 1000 });
+  await favoritePage.screenshot({ path: resolve(artifacts, "favorites.png"), fullPage: true });
+  await favoriteToolbar.locator("summary").click();
+  await favoriteToolbar.getByRole("button", { name: "Retirer des favoris : Boîte", exact: true }).focus();
+  await favoritePage.keyboard.press("Space");
+  await shortcuts.getByRole("button", { name: "Boîte", exact: true }).waitFor({ state: "detached" });
+  await favoriteToolbar.getByRole("button", { name: "Retirer des favoris : Image plein écran", exact: true }).click();
+  await shortcuts.waitFor({ state: "hidden" });
+  await favoritePage.reload();
+  await favoriteToolbar.locator("summary").waitFor();
+  await shortcuts.waitFor({ state: "hidden" });
+  await favoritePage.close();
+  results.push("Favoris : ajout et retrait sans mutation, persistance, raccourcis directs et configurables, Ctrl+Z, focus clavier et affichage à 320 px");
   const selectionPage = await context.newPage();
   await selectionPage.goto("https://cforp.desire2learn.com/prototype/");
   const selectionToolbar = selectionPage.locator('[data-cel-editor-id="demo-editor"]');
@@ -235,7 +344,12 @@ try {
       return { html, text: savedBody.textContent,
         component: savedBody.querySelector('[data-component="grid"]')?.outerHTML };
     }, scenario);
-    await insert("Image plein écran", undefined, selectionToolbar);
+    await selectionToolbar.locator("summary").click();
+    const selectionSearch = selectionToolbar.getByRole("searchbox");
+    await selectionSearch.fill("plein ecran");
+    await selectionSearch.press("Enter");
+    await selectionToolbar.getByRole("button", { name: "Insérer", exact: true }).click();
+    await selectionToolbar.locator("dialog").waitFor({ state: "hidden" });
     const inserted = await selectionPage.evaluate(() => {
       const editor = tinymce.get("demo-editor");
       const body = new DOMParser().parseFromString(editor.getContent(), "text/html").body;
@@ -258,7 +372,23 @@ try {
     await selectionPage.keyboard.press("ControlOrMeta+Shift+Z");
     assert.equal(await selectionPage.evaluate(() => !!tinymce.get("demo-editor").getBody().querySelector('[data-component="fullimg"]')), true);
   }
+  const beforeDirect = await selectionPage.evaluate(() => {
+    const editor = tinymce.get("demo-editor");
+    editor.setContent('<p>Avant <strong>Texte sélectionné</strong> après</p>');
+    editor.undoManager.reset();
+    editor.focus();
+    editor.selection.select(editor.getBody().querySelector("strong"), true);
+    return editor.getContent();
+  });
+  await insert("Boîte", undefined, selectionToolbar);
+  assert.match(await selectionPage.evaluate(() => tinymce.get("demo-editor").getContent()), /data-component="boite-sans-creator"/);
+  assert.equal(await selectionPage.evaluate(() => tinymce.get("demo-editor").getBody().lastElementChild.querySelector("strong")?.textContent), "Texte sélectionné");
+  await selectionPage.waitForFunction(() => document.activeElement === tinymce.get("demo-editor").iframeElement);
+  await selectionPage.keyboard.press("ControlOrMeta+Z");
+  assert.equal(await selectionPage.evaluate(() => tinymce.get("demo-editor").getContent()), beforeDirect);
+  await insert("Boîte", undefined, selectionToolbar);
   await selectionPage.close();
+  results.push("Composant sans options : insertion directe sans fenêtre, sélection conservée, Ctrl+Z et nouvelle insertion");
   results.push("Insertion avant la sélection : texte, plusieurs paragraphes à rebours et composant entier conservés, annulation et rétablissement");
   await end();
   const beforeInsert = await content();
@@ -324,7 +454,7 @@ try {
     editor.focus(); editor.selection.select(nested.querySelector('[data-slot="copyrights"]'), true); editor.selection.collapse(false);
   });
   await toolbar.getByRole("button", { name: "Options du composant…", exact: true }).click();
-  assert.deepEqual(await toolbar.getByLabel("Composant à modifier").locator("option").allTextContents(), ["jwplayer", "grid"]);
+  assert.deepEqual(await toolbar.getByLabel("Composant à modifier").locator("option").allTextContents(), ["Lecteur JWPlayer", "Colonnes 1/3 – 2/3"]);
   await toolbar.getByLabel("Masquer la description").selectOption("true");
   await toolbar.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await toolbar.locator("dialog").waitFor({ state: "hidden" });
@@ -493,6 +623,9 @@ try {
     await route.fulfill(missingCatalog ? { status: 404, body: "Missing catalog" }
       : { json: route.request().url().includes("123-alpha") ? courseCatalog : { ...courseCatalog, entries: [] } });
   });
+  await mediaToolbar.locator("summary").click();
+  await mediaToolbar.getByRole("button", { name: "Ajouter aux favoris : Image plein écran", exact: true }).click();
+  await mediaToolbar.locator(".favorites").getByRole("button", { name: "Image plein écran", exact: true }).waitFor();
   await coursePage.evaluate(() => history.pushState({}, "", "/d2l/le/content/123/EditFile"));
   const courseToolbar = coursePage.locator('[data-cel-editor-id="demo-editor"]');
   await courseToolbar.waitFor();

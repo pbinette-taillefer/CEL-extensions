@@ -12,7 +12,7 @@ test("script générique sans fragments embarqués, identité conservée pour la
   const meta = parseScript(source);
   assert.equal(meta.name, "Composants CEL — prototype");
   assert.equal(meta.namespace, "cel");
-  assert.equal(meta.version, "0.4.3");
+  assert.equal(meta.version, "0.6.1");
   assert.ok(!source.includes("med-fullimg"));
 });
 
