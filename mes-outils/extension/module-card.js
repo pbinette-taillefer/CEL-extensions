@@ -1,4 +1,4 @@
-import { isModuleBlocked } from "./shared.js";
+import { isModuleBlocked, isLocal, sourceLabel, executionLabel } from "./shared.js";
 
 const formatDate = (value) =>
   value
@@ -42,6 +42,7 @@ function updatePanel(item, deferred) {
     ["Pages exclues", meta.excludeMatches.join("\n") || "Aucune"],
     ["Cadres", meta.allFrames ? "Pages et cadres correspondants" : "Page principale uniquement"],
     ["Moment d’exécution", meta.runAt.replace("_", "-")],
+    ["Contexte d’exécution", executionLabel(meta)],
   ];
   const before = scope(current.meta);
   const after = scope(pending.meta);
@@ -148,13 +149,15 @@ export function createModuleCard(item, { updateDeferred = false } = {}) {
   );
   icon.append(path);
   check.append(icon);
-  controls.append(check);
+  if (!isLocal(module)) controls.append(check);
   const info = element("div", "tool-info");
   const stats = element("dl", "stats");
   for (const [name, value] of [
-    ["Dernière vérification", formatDate(item.lastChecked)],
+    ["Mises à jour", isLocal(module) ? "Réimportation manuelle du fichier" : "Vérification automatique"],
+    ...(!isLocal(module) ? [["Dernière vérification", formatDate(item.lastChecked)]] : []),
     ["Dernière installation", formatDate(module.updatedAt)],
-    ["Source", module.sourceUrl],
+    ["Source", sourceLabel(module)],
+    ["Contexte d’exécution", executionLabel(module.meta)],
   ]) {
     const group = element("div");
     group.append(element("dt", "", name), element("dd", "", value));

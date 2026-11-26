@@ -58,6 +58,17 @@
             </button>
           </div>
         </form>
+        <details id="advanced-options" class="advanced-options">
+          <summary>Options avancées</summary>
+          <form id="local-form">
+            <label class="field-label" for="script-file">Importer un script local</label>
+            <p class="field-hint">Choisissez un fichier .js avec un en-tête UserScript. Une copie sera conservée dans Mes outils. Pour la modifier, réimportez le fichier.</p>
+            <div class="url-row">
+              <input type="file" id="script-file" accept=".js,text/javascript,application/javascript" required />
+              <button type="submit" class="secondary" id="prepare-local">Examiner le fichier</button>
+            </div>
+          </form>
+        </details>
         <section id="preview" class="preview" hidden aria-labelledby="preview-name">
           <span class="section-label">Prêt à installer</span>
           <h2 id="preview-name" tabindex="-1"></h2>
@@ -72,18 +83,20 @@
               <dd id="preview-matches"></dd>
             </div>
             <div>
-              <dt>Source des mises à jour</dt>
+              <dt>Source</dt>
               <dd id="preview-source"></dd>
             </div>
+            <div><dt>Contexte d’exécution</dt><dd id="preview-world"></dd></div>
           </dl>
           <p>
-            Cet outil pourra modifier les pages indiquées et recevoir ses mises à jour depuis cette
-            source.
+            Cet outil pourra lire et modifier les pages indiquées.
             <span id="replacement-note" hidden>
-              L’outil provenant de cette adresse sera remplacé.
+              La copie installée depuis cette source sera remplacée.
             </span>
           </p>
+          <p id="preview-updates"></p>
           <p>L’outil s’exécute après le chargement du DOM et la vérification de son autorisation (document-idle).</p>
+          <p id="preview-page-context" hidden>Le contexte de la page donne accès aux objets et fonctions JavaScript du site. Le site partage cet environnement et peut interagir avec le code de l’outil.</p>
           <div class="actions">
             <button type="button" id="confirm-install" class="primary">
               Confirmer l’installation

@@ -61,7 +61,7 @@ export function parseScript(code) {
     "exclude",
     "unwrap",
     "sandbox",
-    "inject-into",
+    "mes-outils-tinymce",
   ]) {
     if (fields.has(key))
       throw new Error(`@${key} n’est pas pris en charge par ce gestionnaire simplifié.`);
@@ -75,6 +75,9 @@ export function parseScript(code) {
   if (!matches.length) throw new Error("Ajoutez au moins une règle @match HTTPS dans l’outil.");
   const runAt = one("run-at") || "document-idle";
   if (runAt !== "document-idle") throw new Error(RUN_AT_HELP);
+  const injectInto = one("inject-into") || "content";
+  if (!["content", "page"].includes(injectInto) || (fields.has("inject-into") && !one("inject-into")))
+    throw new Error("@inject-into accepte uniquement content (isolé) ou page (contexte du site).");
   try {
     parse(code, { ecmaVersion: "latest", sourceType: "script" });
   } catch (error) {
@@ -90,22 +93,30 @@ export function parseScript(code) {
     excludeMatches: [...new Set((fields.get("exclude-match") || []).map(targetPattern))],
     runAt: runAt.replace("-", "_"),
     allFrames: !fields.has("noframes"),
+    injectInto,
   };
 }
 
 export function registration(script, id) {
   // Revalidate stored previews and tools created by earlier extension versions.
   if (!isSupportedTiming(script.meta)) throw new Error(RUN_AT_HELP);
-  return {
-    id,
-    js: [
-      {
-        code: `(globalThis.browser ?? globalThis.chrome).runtime.sendMessage(${JSON.stringify({ type: "authorize", id, digest: script.digest })}).then(allowed => {
+  const page = script.meta.injectInto === "page";
+  const message = JSON.stringify({ type: page ? "execute-page" : "authorize", id, digest: script.digest });
+  const code = page
+    ? `(globalThis.browser ?? globalThis.chrome).runtime.sendMessage(${message}).then(result => {
+  if (result !== true) throw new Error(typeof result?.error === "string" ? result.error : "Exécution dans la page refusée.");
+}).catch(console.error);`
+    : `(globalThis.browser ?? globalThis.chrome).runtime.sendMessage(${message}).then(allowed => {
   if (allowed !== true) return;
   (() => {
 ${script.code}
 })();
-}).catch(console.error);`,
+}).catch(console.error);`;
+  return {
+    id,
+    js: [
+      {
+        code,
       },
     ],
     matches: script.meta.matches,
@@ -114,6 +125,18 @@ ${script.code}
     allFrames: script.meta.allFrames,
     world: "USER_SCRIPT",
   };
+}
+
+async function scriptDigest(code) {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code));
+  return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export async function localScript(name, code) {
+  if (typeof name !== "string" || name.length > 255 || !/^[^/\\\x00]+\.js$/i.test(name))
+    throw new Error("Choisissez un fichier JavaScript .js.");
+  const meta = parseScript(code);
+  return { sourceKind: "local", sourceName: name, sourceUrl: null, code, meta, digest: await scriptDigest(code) };
 }
 
 export async function downloadScript(input, fetcher = fetch) {
@@ -148,10 +171,7 @@ export async function downloadScript(input, fetcher = fetch) {
       await reader.cancel().catch(() => {});
     }
     const meta = parseScript(code);
-    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code));
-    const digest = Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join(
-      "",
-    );
+    const digest = await scriptDigest(code);
     return { sourceUrl: url, code, meta, digest };
   } catch (error) {
     if (error.name === "AbortError")

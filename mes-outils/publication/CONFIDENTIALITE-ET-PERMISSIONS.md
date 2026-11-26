@@ -10,7 +10,9 @@ Permettre à l’utilisateur d’installer, d’activer et de mettre à jour apr
 
 **alarms** : déclencher une vérification des versions toutes les 60 minutes et recréer l’alarme au démarrage si nécessaire. Le téléchargement d’une nouvelle version ne l’installe pas sans approbation.
 
-**userScripts** : enregistrer et exécuter les scripts JavaScript choisis et confirmés par l’utilisateur dans le monde isolé USER_SCRIPT, sur les sites autorisés. La messagerie sert uniquement à vérifier l’autorisation locale d’exécution de la version installée.
+**userScripts** : enregistrer et exécuter les scripts JavaScript choisis et confirmés par l’utilisateur sur les sites autorisés. Le mode par défaut reste isolé dans USER_SCRIPT. Un outil déclarant `@inject-into page` demande au lanceur isolé l’exécution de la copie approuvée dans MAIN, après contrôle de l’empreinte, de l’activation, des règles et du document émetteur. Le site peut interagir avec ce code, sans recevoir les API d’extension.
+
+**Import local** : le sélecteur de fichier dans Options avancées lit seulement le fichier .js choisi. Il ne demande aucune permission supplémentaire, ne conserve pas son chemin complet et ne surveille pas le disque. Le gestionnaire ignore ces outils dans les vérifications réseau et attend une réimportation confirmée pour les remplacer.
 
 **Accès aux sites des outils** : aucun domaine n’est imposé dans le manifeste. À la confirmation, l’extension demande l’accès aux domaines HTTPS explicites déclarés par les règles @match. Les jokers de domaine et les ports ne sont pas acceptés. Une mise à jour ajoutant un domaine nécessite son autorisation avant activation.
 
@@ -18,7 +20,7 @@ Permettre à l’utilisateur d’installer, d’activer et de mettre à jour apr
 
 ## Code distant : déclarer OUI
 
-L’extension télécharge les scripts utilisateur depuis les URL HTTPS explicitement choisies par l’utilisateur. Leur syntaxe est analysée localement avec Acorn embarqué. L’aperçu n’exécute pas le code. Une confirmation installe le fichier exact identifié par SHA-256. Les versions suivantes attendent une nouvelle approbation. Le code s’exécute exclusivement via l’API userScripts dans le monde USER_SCRIPT sur les pages autorisées. Aucun eval, new Function ou script distant n’est utilisé dans les pages de l’extension ou le service worker.
+L’extension télécharge les scripts utilisateur depuis les URL HTTPS explicitement choisies par l’utilisateur. Leur syntaxe est analysée localement avec Acorn embarqué. L’aperçu n’exécute pas le code. Une confirmation installe le fichier exact identifié par SHA-256. Les versions suivantes attendent une nouvelle approbation. Le code s’exécute exclusivement via l’API userScripts, dans USER_SCRIPT par défaut ou dans MAIN si l’outil déclare @inject-into page, sur les pages autorisées. Aucun eval, new Function ou script distant n’est utilisé dans les pages de l’extension ou le service worker.
 
 Le code des outils est téléchargé à la demande, puis uniquement après confirmation pour l’installation. Ce comportement doit être décrit selon le canal de distribution choisi ; le code distant reste du code téléchargé même après son enregistrement local.
 

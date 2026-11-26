@@ -139,6 +139,9 @@ async function removeModule(item) {
 
 function showCheckResult(result) {
   switch (result.outcome) {
+    case "local":
+      notice("Outil local : réimportez le fichier pour installer une nouvelle version.");
+      break;
     case "error":
       notice(result.state.lastError, true);
       break;

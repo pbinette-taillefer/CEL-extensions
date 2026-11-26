@@ -14,6 +14,16 @@ export function isSupportedTiming(meta) {
   return meta?.runAt === "document_idle";
 }
 
+export const isLocal = (script) => script?.sourceKind === "local";
+export const executionLabel = (meta) => meta?.injectInto === "page" ? "Contexte de la page" : "Isolé";
+export const sourceLabel = (script) => isLocal(script) ? `Fichier local · ${script.sourceName}` : script.sourceUrl;
+export function sameSource(left, right) {
+  if (isLocal(left) !== isLocal(right)) return false;
+  return isLocal(left)
+    ? left.meta.name === right.meta.name && left.meta.namespace === right.meta.namespace
+    : left.sourceUrl === right.sourceUrl;
+}
+
 // Only explicit HTTPS hosts are accepted. Permission grants cover the host;
 // the script's match patterns still limit execution to the declared paths.
 export function targetPattern(value) {

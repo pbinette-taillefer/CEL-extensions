@@ -1,6 +1,8 @@
-# Réponses aux formulaires de publication — Mes outils 0.1.2
+# Réponses aux formulaires de publication — Mes outils 0.2.0
 
-Préparé le 25 novembre 2026 à partir du code livré et de la démonstration. Aucun formulaire en ligne n’a été rempli : les comptes développeur ne sont pas encore créés. L’hébergement de la politique et de la démonstration n’est pas encore choisi.
+Actualisé le 25 novembre 2026 à partir de la version 0.2.0. L’utilisateur indique avoir déjà soumis une version, encore en validation. Le tableau de bord et les URL hébergées n’ont pas été consultés dans cette session.
+
+Mise à jour Edge : [tableau de bord Partner Center](https://partner.microsoft.com/dashboard/microsoftedge), puis **Mes outils → Extension overview → Cancel submission** si la version précédente est encore en certification. Mettre à jour le paquet, les textes et la politique, puis sélectionner **Publish**.
 
 ## Créer les comptes
 
@@ -30,23 +32,23 @@ pierrick.extension@gmail.com
 
 ### Objectif unique / Single purpose
 
-Permettre à l’utilisateur d’installer, d’activer, de suspendre et de désinstaller ses scripts utilisateur autonomes sur les sites HTTPS qu’il autorise. Les nouvelles versions des scripts sont recherchées périodiquement et installées uniquement après approbation explicite.
+Permettre à l’utilisateur d’installer et de gérer ses scripts utilisateur JavaScript, depuis une URL HTTPS ou un fichier local, puis de les exécuter uniquement sur les sites HTTPS qu’il autorise. Chaque outil peut être activé, suspendu, remplacé ou désinstallé indépendamment, après confirmation de ses règles et de son contexte d’exécution.
 
 ### Justification storage
 
-Conserver localement dans le profil du navigateur le code et les métadonnées des outils, leurs adresses sources, leurs versions, leurs états d’activation et les mises à jour en attente. Le stockage de session conserve l’aperçu temporaire à confirmer. Aucune synchronisation ni télémétrie du gestionnaire n’est utilisée.
+Conserver localement le code, les métadonnées, les versions, les règles d’exécution et les états des outils, ainsi que les mises à jour en attente. Pour les fichiers importés, conserver une copie du code et le nom du fichier, sans son chemin complet. Le stockage de session conserve temporairement l’aperçu avant confirmation. Aucune synchronisation ni télémétrie n’est utilisée.
 
 ### Justification alarms
 
-Déclencher une vérification des versions des outils toutes les 60 minutes lorsque le navigateur est disponible et recréer l’alarme au démarrage si nécessaire. Les versions téléchargées restent en attente jusqu’à leur approbation par l’utilisateur.
+Vérifier toutes les 60 minutes les nouvelles versions des outils ajoutés depuis une URL HTTPS, lorsque le navigateur est disponible. Les versions détectées attendent une approbation explicite avant installation. Les outils importés depuis un fichier local sont exclus de ces vérifications.
 
 ### Justification userScripts
 
-Enregistrer et exécuter les scripts utilisateur choisis et confirmés par l’utilisateur dans le monde isolé USER_SCRIPT, uniquement sur les pages HTTPS déclarées par leurs règles et sur les domaines autorisés. La messagerie dédiée vérifie que la version demandant l’exécution correspond toujours à l’outil activé. Seul le mode document-idle est pris en charge.
+Enregistrer et exécuter les scripts JavaScript choisis et confirmés par l’utilisateur, uniquement sur les pages HTTPS déclarées par leurs règles et sur les domaines autorisés. Par défaut, ils s’exécutent dans un contexte isolé. Un outil déclarant @inject-into page s’exécute dans le contexte du site après vérification de son activation, de son empreinte et du document cible. Le contexte est présenté avant installation. Les API d’extension ne sont pas exposées au code exécuté dans la page.
 
 ### Justification des permissions d’hôte / https://*/*
 
-Les adresses des outils et les sites où ils s’exécutent sont choisis par l’utilisateur et ne sont pas connus à l’avance. Le motif HTTPS est optionnel et n’accorde aucun accès global à l’installation. À l’examen d’un outil, l’extension demande l’origine de son serveur de téléchargement. À la confirmation, elle demande les domaines HTTPS explicites de ses règles @match. Une mise à jour ajoutant un domaine nécessite son autorisation.
+Les serveurs des outils et leurs sites d’exécution sont choisis par l’utilisateur et ne sont pas connus à l’avance. Le motif HTTPS est optionnel et n’accorde aucun accès global à l’installation. L’extension demande séparément l’origine de téléchargement pour un outil HTTPS et les domaines explicites déclarés par les règles @match. Un import local demande uniquement les domaines d’exécution. Une mise à jour ajoutant un domaine nécessite une nouvelle autorisation.
 
 ### Politique de confidentialité / Privacy policy URL
 
@@ -54,7 +56,7 @@ Les adresses des outils et les sites où ils s’exécutent sont choisis par l�
 
 ### Description et captures
 
-Utiliser la description commune de `PRESENTATION.md`, le paragraphe de démarrage de `fiches/` correspondant au navigateur, l’icône `visuels/icone-128.png` et la capture `visuels/capture-gestion.png`.
+Utiliser la description commune de `PRESENTATION.md`, le paragraphe de démarrage de `fiches/` correspondant au navigateur et l’icône `visuels/icone-128.png`. Les captures 0.2.0, de 1280 × 800 pixels, sont `visuels/capture-gestion-0.2.0.png`, `visuels/capture-import-local-0.2.0.png` et `visuels/capture-apercu-0.2.0.png`. Elles montrent l’interface réelle avec des outils de démonstration.
 
 ## Chrome : code distant
 
@@ -62,7 +64,7 @@ Réponse : **Oui / Yes, I am using remote code**.
 
 Justification à copier :
 
-Mes outils est un gestionnaire de scripts utilisateur. L’utilisateur fournit lui-même l’URL HTTPS du script, examine ses métadonnées et confirme son installation. Les scripts sont téléchargés sans cookies ni redirection, analysés sans exécution et enregistrés exclusivement via userScripts dans le monde USER_SCRIPT. Chaque nouvelle version attend une approbation liée à l’empreinte SHA-256 exacte du fichier. Aucun code distant n’est exécuté dans les pages de l’extension ou son service worker. Ce fonctionnement relève du cas des gestionnaires de scripts utilisateur décrit par la documentation userScripts.
+Mes outils est un gestionnaire de scripts utilisateur. L’utilisateur choisit une URL HTTPS ou un fichier local, examine ses métadonnées et confirme son installation. Les téléchargements utilisent des requêtes sans cookies ni redirection. Les scripts sont analysés sans exécution, conservés localement et exécutés exclusivement via userScripts, dans un contexte isolé par défaut ou dans celui de la page si l’outil le déclare. Les nouvelles versions HTTPS attendent une approbation liée à l’empreinte SHA-256 exacte du fichier. Les fichiers locaux sont remplacés par réimportation confirmée. Aucun code externe n’est exécuté dans l’interface de l’extension ou son service worker.
 
 Voir [l’exception documentée pour les gestionnaires de scripts](https://developer.chrome.com/docs/extensions/develop/migrate/remote-hosted-code#user_scripts_api). La soumission reste soumise à l’examen du store.
 
@@ -72,13 +74,13 @@ Déclarer fidèlement **Oui** si le formulaire demande si l’extension exécute
 
 Justification à copier :
 
-Mes outils est un gestionnaire de scripts utilisateur choisis par l’utilisateur. Les fichiers HTTPS sont examinés avant installation et exécutés uniquement via l’API userScripts dans le monde isolé USER_SCRIPT sur les pages autorisées. Chaque installation et chaque nouvelle version nécessitent une confirmation explicite liée au fichier exact. Aucun code distant n’est exécuté dans l’interface du gestionnaire ou son service worker. Merci d’examiner ce fonctionnement en tant que gestionnaire de scripts utilisateur et de confirmer son admissibilité dans le programme.
+Mes outils est un gestionnaire de scripts utilisateur. L’utilisateur choisit une URL HTTPS ou un fichier local, examine ses métadonnées et confirme son installation. Le code s’exécute uniquement via l’API userScripts sur les pages autorisées, dans un contexte isolé par défaut ou dans celui de la page si l’outil le déclare. Chaque installation, mise à jour HTTPS et réimportation locale nécessite une confirmation. Aucun code externe n’est exécuté dans l’interface du gestionnaire ou son service worker. Merci d’examiner cet usage de userScripts en tant que gestionnaire de scripts utilisateur.
 
 La [documentation Edge](https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension#declare-any-use-of-remote-code) interdit généralement le code distant en Manifest V3. Cette réponse décrit le comportement réel ; elle ne garantit pas son acceptation. Si le tableau de bord bloque cette déclaration, demander une clarification à l’équipe d’examen avant de poursuivre.
 
 ## Données : texte descriptif à copier
 
-Le gestionnaire conserve localement le code, les URL sources, les versions, les règles d’exécution, les états d’activation et les dates de gestion des outils. Il ne comporte ni compte, ni publicité, ni télémétrie. Les requêtes HTTPS de téléchargement transmettent au serveur choisi l’URL demandée, l’adresse IP visible lors de la connexion et les en-têtes techniques nécessaires, sans cookies ni Referer. Le gestionnaire n’envoie pas le contenu des pages à son éditeur. Les scripts utilisateur installés peuvent lire et modifier le contenu des pages autorisées et peuvent avoir des traitements ou communications propres selon leur code.
+Le gestionnaire conserve localement le code, les URL sources ou noms de fichiers importés, les versions, les règles d’exécution, les états d’activation et les dates de gestion des outils. Il ne conserve pas le chemin complet des fichiers importés et ne surveille pas le disque. Il ne comporte ni compte, ni publicité, ni télémétrie. Les requêtes HTTPS de téléchargement transmettent au serveur choisi l’URL demandée, l’adresse IP visible lors de la connexion et les en-têtes techniques nécessaires, sans cookies ni Referer. Le gestionnaire n’envoie pas le contenu des pages à son éditeur. Les scripts installés peuvent lire et modifier le contenu des pages autorisées et peuvent avoir des traitements ou communications propres selon leur code.
 
 ### Catégories à rapprocher des cases réellement présentées
 
@@ -109,8 +111,8 @@ Joindre le document généré `dist/publication/INSTRUCTIONS-EXAMEN.md` après c
 ## État du dossier
 
 - Textes, contact, permissions et explications sur le code distant : préparés.
-- Comptes développeur : à créer par le propriétaire.
-- Politique et démonstration : fichiers préparés, hébergement et URL à choisir.
+- Comptes développeur et soumission : l’utilisateur indique une soumission existante en validation; état non consulté dans cette session.
+- Politique et démonstration : fichiers préparés, URL publiques à vérifier dans le tableau de bord.
 - Catégories de données et certifications : à finaliser dans les vrais formulaires selon les outils distribués.
 - Dialogues Firefox : protocole fourni dans `TEST-FIREFOX.md`, vérification manuelle encore requise.
-- Formulaires en ligne, téléversement et soumission : non effectués.
+- Formulaires en ligne, téléversement et soumission : aucune modification effectuée par l’assistant dans le tableau de bord.

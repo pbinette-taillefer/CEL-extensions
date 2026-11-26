@@ -16,15 +16,19 @@ Français. Catégorie : Productivité, ou catégorie équivalente proposée dans
 
 Copier la description ci-dessous, puis le paragraphe de démarrage du fichier `fiches/` correspondant au store. Les autres sections sont des consignes pour l’éditeur.
 
-Mes outils vous permet d’installer et de gérer vos outils JavaScript sur les sites HTTPS autorisés depuis une seule extension.
+Mes outils vous permet d’installer et de gérer vos outils JavaScript depuis une seule extension, sur les sites HTTPS que vous autorisez.
 
-Ajoutez un lien HTTPS direct fourni par une source de confiance, examinez le nom, la version et les pages autorisées, puis confirmez l’installation. Gérez plusieurs outils, activez-les, mettez-les en pause ou désinstallez-les indépendamment.
+Ajoutez un outil depuis un lien HTTPS direct ou importez un fichier JavaScript local dans les Options avancées. Avant de confirmer, examinez son nom, sa version, ses pages autorisées et son contexte d’exécution.
 
-L’extension recherche les nouvelles versions toutes les 60 minutes lorsque le navigateur est disponible. Une mise à jour détectée attend votre approbation : la version installée reste utilisée jusqu’à votre décision. La veille ou l’absence de réseau peuvent retarder la vérification. Les mises à jour ne rechargent pas vos onglets ouverts.
+Gérez plusieurs outils et activez-les, mettez-les en pause ou désinstallez-les indépendamment. Les outils sont isolés du JavaScript du site par défaut. Certains peuvent demander le contexte de la page pour accéder à ses objets et fonctions; ce choix est indiqué dans l’aperçu.
 
-Pour commencer, autorisez les scripts utilisateur selon les indications affichées, ajoutez l’adresse HTTPS directe de votre outil et confirmez l’installation en autorisant les sites indiqués. Enregistrez votre travail avant d’actualiser les pages concernées.
+Pour les outils ajoutés par lien, l’extension recherche les nouvelles versions toutes les 60 minutes lorsque le navigateur est disponible. Chaque mise à jour attend votre approbation. La veille ou l’absence de réseau peuvent retarder la vérification.
 
-Les outils sont des scripts utilisateur JavaScript autonomes. Ils sont limités aux pages correspondant à leurs règles @match et peuvent lire ou modifier les pages autorisées. Utilisez uniquement des outils dont vous connaissez la source et le comportement. Les scripts ne sont pas fournis automatiquement : leur lien est communiqué par votre équipe ou leur auteur.
+Les fichiers locaux se mettent à jour par réimportation manuelle. Une copie est conservée dans le navigateur; le fichier d’origine n’est pas surveillé.
+
+Pour commencer, autorisez les scripts utilisateur selon les indications affichées, ajoutez votre outil, puis confirmez l’installation en autorisant les sites indiqués. Enregistrez votre travail avant d’actualiser les pages concernées.
+
+Les outils sont des scripts utilisateur JavaScript autonomes. Ils peuvent lire et modifier les pages autorisées correspondant à leurs règles. Utilisez uniquement des outils provenant de sources de confiance. Les scripts sont fournis par votre équipe ou leur auteur.
 
 Le gestionnaire conserve ses outils et leur état localement dans le navigateur, sans compte ni télémétrie intégrés. Les connexions aux serveurs choisis servent au téléchargement des outils et de leurs versions. Le comportement des scripts installés dépend de leur propre code ; consultez la politique de confidentialité et les informations de leur auteur.
 

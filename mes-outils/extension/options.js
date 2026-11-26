@@ -1,5 +1,5 @@
 import { api } from "./browser-api.js";
-import { sourceAddress, targetOrigins } from "./shared.js";
+import { sourceAddress, targetOrigins, MAX_BYTES, sourceLabel, executionLabel } from "./shared.js";
 import { $, send, renderStatus, setupActions, notice, watchStatus } from "./ui.js";
 
 let pendingToken = null;
@@ -13,6 +13,25 @@ function clearPreview() {
   $("preview").hidden = true;
 }
 $("script-url").addEventListener("input", clearPreview);
+$("script-file").addEventListener("change", clearPreview);
+function showPreview(candidate) {
+  pendingToken = candidate.token;
+  pendingMeta = candidate.meta;
+  $("preview-name").textContent = candidate.meta.name;
+  $("preview-description").textContent = candidate.meta.description;
+  $("preview-version").textContent = candidate.meta.version;
+  $("preview-source").textContent = sourceLabel(candidate);
+  $("preview-matches").textContent = candidate.meta.matches.join("\n");
+  $("preview-world").textContent = executionLabel(candidate.meta);
+  $("preview-page-context").hidden = candidate.meta.injectInto !== "page";
+  $("preview-updates").textContent = candidate.sourceKind === "local"
+    ? "Fichier local : les mises à jour se font en réimportant le fichier. Le fichier d’origine n’est pas surveillé."
+    : "Les nouvelles versions sont recherchées à cette adresse et attendent votre approbation.";
+  $("preview").hidden = false;
+  $("replacement-note").hidden = !candidate.replaces;
+  notice("");
+  $("preview-name").focus();
+}
 $("cancel-install").addEventListener("click", () => {
   clearPreview();
   notice("");
@@ -35,17 +54,20 @@ $("install-form").addEventListener("submit", (event) => {
     if (!(await permission)) throw new Error("L’accès au serveur n’a pas été autorisé.");
     notice("Téléchargement de l’aperçu…");
     const candidate = await send("prepare", { url: address.url });
-    pendingToken = candidate.token;
-    pendingMeta = candidate.meta;
-    $("preview-name").textContent = candidate.meta.name;
-    $("preview-description").textContent = candidate.meta.description;
-    $("preview-version").textContent = candidate.meta.version;
-    $("preview-source").textContent = candidate.sourceUrl;
-    $("preview-matches").textContent = candidate.meta.matches.join("\n");
-    $("preview").hidden = false;
-    $("replacement-note").hidden = !candidate.replaces;
-    notice("");
-    $("preview-name").focus();
+    showPreview(candidate);
+  });
+});
+$("local-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const file = $("script-file").files[0];
+  if (!file) return;
+  run(async () => {
+    clearPreview();
+    if (file.size > MAX_BYTES) throw new Error("L’outil dépasse la taille maximale de 1 Mo.");
+    let code;
+    try { code = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer()); }
+    catch { throw new Error("Le fichier JavaScript doit être encodé en UTF-8."); }
+    showPreview(await send("prepareLocal", { name: file.name, code }));
   });
 });
 $("confirm-install").addEventListener("click", () => {
@@ -57,6 +79,7 @@ $("confirm-install").addEventListener("click", () => {
     renderStatus(await send("install", { token: pendingToken }));
     clearPreview();
     $("script-url").value = "";
+    $("script-file").value = "";
     notice(
       "Outil installé. Enregistrez votre travail puis actualisez les pages concernées pour l’utiliser.",
     );

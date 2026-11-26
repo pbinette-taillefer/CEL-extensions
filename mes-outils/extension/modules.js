@@ -1,11 +1,14 @@
 import { createSingleManager, readPendingInstallation } from "./manager.js";
 import { downloadScript, registration } from "./script.js";
+import { executePageScript } from "./page-execution.js";
 import {
   SCRIPT_ID,
   HOUR,
   UPDATE_ALARM,
   UPDATE_INTERVAL_MINUTES,
   isSupportedTiming,
+  isLocal,
+  sameSource,
 } from "./shared.js";
 
 function matchesRegistration(actual, expected) {
@@ -90,14 +93,19 @@ export function createManager(api, { download = downloadScript, now = Date.now }
   async function prepare(url) {
     const candidate = await manager("preview").prepare(url);
     const existing = (await read()).modules.find(
-      (item) => item.installed.sourceUrl === candidate.sourceUrl,
+      (item) => sameSource(item.installed, candidate),
     );
+    return { ...candidate, replaces: existing?.installed.meta.name || null };
+  }
+  async function prepareLocal(name, code) {
+    const candidate = await manager("preview").prepareLocal(name, code);
+    const existing = (await read()).modules.find((item) => sameSource(item.installed, candidate));
     return { ...candidate, replaces: existing?.installed.meta.name || null };
   }
   async function install(token) {
     const candidate = await readPendingInstallation(api, token, now);
     const data = await read();
-    const existing = data.modules.find((item) => item.installed.sourceUrl === candidate.sourceUrl);
+    const existing = data.modules.find((item) => sameSource(item.installed, candidate));
     const duplicate = data.modules.find(
       (item) =>
         item.id !== existing?.id &&
@@ -106,7 +114,7 @@ export function createManager(api, { download = downloadScript, now = Date.now }
     );
     if (duplicate)
       throw new Error(
-        "Cet outil est déjà installé depuis une autre adresse. Désinstallez-le avant de changer sa source.",
+        "Cet outil est déjà installé depuis une autre source. Désinstallez-le avant de changer sa source.",
       );
     await manager(existing?.id || "module-" + crypto.randomUUID()).install(token);
     return state();
@@ -114,7 +122,7 @@ export function createManager(api, { download = downloadScript, now = Date.now }
   async function check(id) {
     if (id !== undefined) return (await requireModule(id)).check();
     const results = [];
-    for (const item of (await read()).modules)
+    for (const item of (await read()).modules.filter((entry) => !isLocal(entry.installed)))
       results.push({ id: item.id, ...(await manager(item.id).check()) });
     return results;
   }
@@ -158,7 +166,7 @@ export function createManager(api, { download = downloadScript, now = Date.now }
       await read();
       await reconcile();
     });
-    for (const item of (await read()).modules) {
+    for (const item of (await read()).modules.filter((entry) => !isLocal(entry.installed))) {
       if (!item.lastChecked || now() - item.lastChecked >= HOUR) await manager(item.id).check();
     }
   }
@@ -170,6 +178,12 @@ export function createManager(api, { download = downloadScript, now = Date.now }
         isSupportedTiming(item.installed.meta) &&
         item.installed.digest === digest
       );
+    });
+  }
+  async function executePage(message, sender) {
+    return mutate(async () => {
+      const item = (await read()).modules.find((entry) => entry.id === message.id);
+      return executePageScript(api, item?.installed, message, sender);
     });
   }
   async function toggle(id, enabled) {
@@ -190,9 +204,11 @@ export function createManager(api, { download = downloadScript, now = Date.now }
   return {
     state,
     prepare,
+    prepareLocal,
     check,
     bootstrap,
     authorize,
+    executePage,
     synchronize: () => mutate(reconcile),
     install: (token) => mutate(() => install(token)),
     approveUpdate: (id, digest) => mutate(() => approveUpdate(id, digest)),

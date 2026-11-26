@@ -616,6 +616,19 @@ body[aria-busy="true"] #notice::before {
     flex-direction: column;
   }
 }
+.advanced-options {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.advanced-options > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: .9rem;
+}
+.advanced-options form { margin-top: 16px; }
+.advanced-options .field-hint { display: block; margin: 8px 0 14px; color: var(--muted); }
+input[type="file"] { min-width: 0; font: inherit; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   *,
   *::after,

@@ -1,4 +1,4 @@
-# Distribution de Mes outils — version 0.1.2
+# Distribution de Mes outils — version 0.2.0
 
 Éditeur et contact : Pierrick — pierrick.extension@gmail.com.
 Le dépôt peut rester privé. Les commandes préparent des fichiers locaux ; elles ne publient rien.

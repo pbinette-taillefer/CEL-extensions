@@ -1,4 +1,4 @@
-import { registration, compareVersions, downloadScript } from "./script.js";
+import { registration, compareVersions, downloadScript, localScript } from "./script.js";
 import {
   SCRIPT_ID,
   targetOrigins,
@@ -6,6 +6,7 @@ import {
   sourceAddress,
   RUN_AT_HELP,
   isSupportedTiming,
+  isLocal,
 } from "./shared.js";
 
 const EMPTY = { installed: null, pendingUpdate: null, lastChecked: null, lastError: null };
@@ -73,6 +74,8 @@ export function createSingleManager(
       if (!isSupportedTiming(installed.meta)) {
         throw new Error(RUN_AT_HELP);
       }
+      if (installed.meta.injectInto === "page" && typeof api.userScripts.execute !== "function")
+        throw new Error("Ce navigateur ne propose pas userScripts.execute, nécessaire au contexte de la page.");
       if (!(await api.permissions.contains({ origins: targetOrigins(installed.meta) }))) {
         throw new Error("Autorisez l’accès aux sites de l’outil dans l’extension pour exécuter l’outil.");
       }
@@ -89,8 +92,8 @@ export function createSingleManager(
       throw error;
     }
   }
-  async function hasSource(url) {
-    return api.permissions.contains({ origins: [sourceAddress(url).permission] });
+  async function hasSource(script) {
+    return isLocal(script) || api.permissions.contains({ origins: [sourceAddress(script.sourceUrl).permission] });
   }
   async function state(snapshot) {
     const data = snapshot || (await read());
@@ -103,6 +106,8 @@ export function createSingleManager(
       installed: installed && {
         meta: installed.meta,
         sourceUrl: installed.sourceUrl,
+        sourceKind: installed.sourceKind || "remote",
+        sourceName: installed.sourceName || null,
         enabled: installed.enabled,
         installedAt: installed.installedAt,
         updatedAt: installed.updatedAt,
@@ -122,43 +127,51 @@ export function createSingleManager(
       targetAllowed: installed
         ? await api.permissions.contains({ origins: targetOrigins(installed.meta) })
         : true,
-      sourceAllowed: installed ? await hasSource(installed.sourceUrl) : true,
+      sourceAllowed: installed ? await hasSource(installed) : true,
     };
   }
   async function prepare(url) {
-    if (!(await hasSource(url)))
+    if (!(await hasSource({ sourceUrl: url })))
       throw new Error("Autorisez l’accès au serveur de l’outil, puis réessayez.");
     const candidate = await download(url);
+    return preview(candidate);
+  }
+  async function preview(candidate) {
     const token = crypto.randomUUID();
     await api.storage.session.set({
       pending: { token, candidate, expiresAt: now() + PREVIEW_TTL_MS },
     });
-    return { token, meta: candidate.meta, sourceUrl: candidate.sourceUrl };
+    return { token, meta: candidate.meta, sourceUrl: candidate.sourceUrl,
+      sourceKind: candidate.sourceKind || "remote", sourceName: candidate.sourceName || null };
+  }
+  async function prepareLocal(name, code) {
+    return preview(await localScript(name, code));
   }
   async function install(token) {
     const candidate = await readPendingInstallation(api, token, now);
-    if (!(await hasSource(candidate.sourceUrl)))
+    if (!(await hasSource(candidate)))
       throw new Error("L’accès au serveur de l’outil a été retiré.");
     const previous = await read();
     const timestamp = now();
-    await commit(
-      {
-        installed: { ...candidate, enabled: true, installedAt: timestamp, updatedAt: timestamp },
-        pendingUpdate: null,
-        lastChecked: timestamp,
-        lastError: null,
-      },
-      previous,
-    );
+    const next = {
+      installed: { ...candidate, enabled: previous.installed?.enabled ?? true,
+        installedAt: previous.installed?.installedAt ?? timestamp, updatedAt: timestamp },
+      pendingUpdate: null,
+      lastChecked: isLocal(candidate) ? null : timestamp,
+      lastError: null,
+    };
+    if (!next.installed.enabled && !(await available())) await save(next);
+    else await commit(next, previous);
     await api.storage.session.remove("pending");
     return state();
   }
   async function check() {
     const previous = await read();
     if (!previous.installed) return { outcome: "empty", state: await state() };
+    if (isLocal(previous.installed)) return { outcome: "local", state: await state() };
     let candidate, failure;
     try {
-      if (!(await hasSource(previous.installed.sourceUrl)))
+      if (!(await hasSource(previous.installed)))
         throw new Error(
           "L’accès au serveur a été retiré. Autorisez-le depuis la page de configuration.",
         );
@@ -180,7 +193,7 @@ export function createSingleManager(
       const timestamp = now();
       try {
         if (failure) throw failure;
-        if (!(await hasSource(latest.installed.sourceUrl)))
+        if (!(await hasSource(latest.installed)))
           throw new Error("L’accès au serveur de l’outil a été retiré.");
         const current = latest.installed;
         const comparison = validateUpdate(candidate, current);
@@ -230,7 +243,7 @@ export function createSingleManager(
     ) {
       throw new Error("L’outil installé a changé. Vérifiez de nouveau ses mises à jour.");
     }
-    if (!(await hasSource(candidate.sourceUrl)))
+    if (!(await hasSource(candidate)))
       throw new Error("L’accès au serveur de l’outil a été retiré.");
     const next = {
       ...previous,
@@ -267,5 +280,5 @@ export function createSingleManager(
       if (stored.lastError !== error.message) await save({ ...stored, lastError: error.message });
     }
   }
-  return { state, prepare, install, check, approveUpdate, toggle, remove, restore };
+  return { state, prepare, prepareLocal, install, check, approveUpdate, toggle, remove, restore };
 }

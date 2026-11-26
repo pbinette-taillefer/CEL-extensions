@@ -25,6 +25,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return manager.state();
     },
     prepare: () => manager.prepare(message.url),
+    prepareLocal: () => manager.prepareLocal(message.name, message.code),
     install: () => manager.install(message.token),
     check: () => manager.check(message.id),
     approveUpdate: () => manager.approveUpdate(message.id, message.digest),
@@ -61,10 +62,15 @@ api.permissions.onRemoved.addListener((permissions) => {
   initialize().catch(console.error);
 });
 
-// User scripts have a separate channel and can only ask whether their stored version is enabled.
+// Only isolated launchers can use this channel; page code receives no extension APIs.
 function authorizeUserScript(message, sender, sendResponse) {
-  if (sender.id !== api.runtime.id || message?.type !== "authorize") return false;
-  manager.authorize(message.id, message.digest).then(sendResponse, () => sendResponse(false));
+  if (sender.id !== api.runtime.id) return false;
+  if (message?.type === "execute-page") {
+    manager.executePage(message, sender).then(sendResponse,
+      (error) => sendResponse({ error: error.message }));
+  } else if (message?.type === "authorize") {
+    manager.authorize(message.id, message.digest).then(sendResponse, () => sendResponse(false));
+  } else return false;
   return true;
 }
 

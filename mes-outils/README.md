@@ -2,7 +2,7 @@
 
 Extension Manifest V3 pour installer et gérer plusieurs outils JavaScript choisis par l’utilisateur sur les sites HTTPS déclarés par chaque outil et autorisés par l’utilisateur.
 
-Chaque outil possède son activation, sa version et sa désinstallation. Les nouvelles versions sont recherchées toutes les 60 minutes et installées uniquement après approbation. Un outil peut lire et modifier les pages autorisées : utilisez uniquement des sources de confiance.
+Chaque outil possède son activation, sa version et sa désinstallation. Pour les outils HTTPS, les nouvelles versions sont recherchées toutes les 60 minutes et installées uniquement après approbation. Les outils locaux se mettent à jour par réimportation manuelle. Un outil peut lire et modifier les pages autorisées : utilisez uniquement des sources de confiance.
 
 ## Contenu du dépôt
 
@@ -43,7 +43,7 @@ Le chargement temporaire dans Firefox ne remplace pas une installation permanent
 
 ## Format des outils
 
-Les outils sont des fichiers JavaScript `.js` publiés sur un CDN public. Le nom du fichier est libre : aucun suffixe particulier n’est imposé. Le fichier doit conserver l’en-tête de métadonnées ci-dessous pour déclarer son nom, sa version et les pages où il s’exécute.
+Les outils sont des fichiers JavaScript `.js`, ajoutés depuis une URL HTTPS directe ou importés depuis le disque dans **Options avancées**. Le nom du fichier est libre : aucun suffixe particulier n’est imposé. Le fichier doit conserver l’en-tête de métadonnées ci-dessous pour déclarer son nom, sa version et les pages où il s’exécute.
 
 ```javascript
 // ==UserScript==
@@ -60,7 +60,40 @@ Les outils sont des fichiers JavaScript `.js` publiés sur un CDN public. Le nom
 
 `@name`, une version numérique et au moins un `@match` sont obligatoires. Les correspondances et exclusions doivent viser des domaines HTTPS explicites, sans joker de domaine ni port. Les jokers de chemin sont acceptés. L’accès à chaque domaine déclaré par @match est demandé à la confirmation de l’installation ou de la mise à jour. Taille maximale : 1 Mo UTF-8. Les API GM_*, `unsafeWindow`, `@require` et `@resource` ne sont pas prises en charge. Ce gestionnaire n’implémente pas toutes les fonctions de Tampermonkey.
 
-Une pause ou suppression agit sur les injections futures ; actualisez les pages après avoir enregistré. Les scripts sont isolés des variables JavaScript internes de la page, mais ont accès au DOM. La syntaxe est analysée avec Acorn sans exécution pendant l’aperçu ; ceci ne garantit pas la sûreté du code.
+Une pause ou suppression agit sur les injections futures ; actualisez les pages après avoir enregistré. Par défaut, les scripts sont isolés des variables JavaScript internes de la page, mais ont accès au DOM. La syntaxe est analysée avec Acorn sans exécution pendant l’aperçu ; ceci ne garantit pas la sûreté du code.
+
+À partir de la version **0.2.0**, `@inject-into page` permet au script d’accéder aux
+objets JavaScript du site, comme `window.tinymce`. `@inject-into content`, ou
+l’absence de directive, conserve l’isolation. Le contexte est indiqué à
+l’installation, dans les détails et lors d’une mise à jour qui le change. Le mode
+page partage l’environnement du site : celui-ci peut interagir avec le code et les
+données de l’outil. Les API d’extension restent dans le lanceur isolé.
+
+Le lanceur transmet uniquement l’identifiant et l’empreinte. Le gestionnaire
+vérifie l’activation, l’empreinte, les règles et exclusions, le cadre et le document
+émetteur, puis exécute sa copie installée dans `MAIN`. Le code envoyé dans un
+message n’est jamais utilisé. L’autorisation et l’injection sont sérialisées avec
+les pauses et mises à jour. Ce mode nécessite `userScripts.execute` et un
+`documentId` dans la messagerie du navigateur; un navigateur incompatible ne peut
+pas exécuter ces outils. L’extension ne contient aucune intégration TinyMCE/D2L.
+
+### Import local, dans Options avancées
+
+Dans la configuration, déplier **Options avancées**, choisir un fichier `.js`, puis
+cliquer sur **Examiner le fichier**. Le même aperçu et la même confirmation des
+sites s’appliquent. Taille maximale : 1 Mo, encodage UTF-8 et métadonnées obligatoires.
+Mes outils conserve le code et le nom du fichier, sans son chemin complet. Le
+fichier d’origine n’est pas surveillé et aucune URL de mise à jour n’est déduite du
+code importé. Les vérifications horaires ignorent les outils locaux.
+
+Réimporter un outil local portant le même `@name` et `@namespace` propose de
+remplacer sa copie, même à version identique et si le fichier a été renommé. La
+pause est conservée. Un outil local et un outil HTTPS avec la même identité ne se
+remplacent pas implicitement : désinstaller l’ancienne source avant de changer de
+mode. Les outils HTTPS gardent leur mécanisme de versions croissantes approuvées.
+
+Le [prototype Composants CEL](../scripts/d2l/composants/README.md) déclare
+`@inject-into page` et s’importe maintenant directement depuis le disque.
 
 Seul `@run-at document-idle` est accepté (également utilisé si la directive est absente). L’outil s’exécute après le chargement du DOM et la vérification asynchrone de son autorisation ; aucun passage avant les scripts de la page ou avant `DOMContentLoaded` n’est garanti. Les anciens outils installés avec `document-start` ou `document-end` sont bloqués avec un message explicite. Leur auteur doit fournir une version compatible ; une mise à jour approuvée peut les rétablir.
 
