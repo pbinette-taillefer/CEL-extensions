@@ -5,8 +5,7 @@
   const REQUEST = "mes-outils:tinymce:request";
   const RESPONSE = "mes-outils:tinymce:response";
   const sessions = new Map();
-  const editorKeys = new WeakMap();
-  let nextEditorKey = 0;
+  let currentEditor, editorKey = 0;
   const ownProps = (node) => Object.fromEntries([...node.attributes]
     .filter((attr) => attr.name.startsWith("data-prop-"))
     .map((attr) => [attr.name, attr.value]));
@@ -17,12 +16,22 @@
       throw new Error("Cet éditeur n’est plus disponible. Rouvrez le menu.");
     return editor;
   }
+  function pageInfo(editor) {
+    const body = editor.getBody();
+    const template = body?.getAttribute("data-cel-template") || "";
+    return { template,
+      courseCode: body?.getAttribute("data-cel-course-code") || "",
+      compatible: template === "handlebars" };
+  }
   function writable(editor) {
+    if (!pageInfo(editor).compatible)
+      throw new Error("Cette page doit utiliser le template Handlebars pour modifier ses composants.");
     if (editor.mode?.isReadOnly()) throw new Error("Cet éditeur est en lecture seule.");
   }
   function restore(session, restoreSelection = true) {
     const editor = editorFor(session.editor.id);
-    if (editor !== session.editor || editor.getContent() !== session.content)
+    if (editor !== session.editor || editor.getContent() !== session.content ||
+        pageInfo(editor).courseCode !== session.courseCode)
       throw new Error("Le contenu a changé depuis l’ouverture du formulaire. Rouvrez-le.");
     writable(editor);
     if (restoreSelection) {
@@ -48,14 +57,12 @@
     }
   }
   const actions = {
-    list() {
-      return (window.tinymce?.get() || []).filter((editor) => editor.initialized && !editor.removed)
-        .map((editor) => {
-          if (!editorKeys.has(editor)) editorKeys.set(editor, `editor-${++nextEditorKey}`);
-          return { id: editor.id, key: editorKeys.get(editor),
-            readonly: !!editor.mode?.isReadOnly(),
-            fullscreen: !!editor.plugins?.fullscreen?.isFullscreen() };
-        });
+    state() {
+      const editor = (window.tinymce?.get() || []).find((editor) => editor.initialized && !editor.removed);
+      if (editor !== currentEditor) { currentEditor = editor; editorKey++; }
+      return editor ? { id: editor.id, key: editorKey, ...pageInfo(editor),
+        readonly: !!editor.mode?.isReadOnly(),
+        fullscreen: !!editor.plugins?.fullscreen?.isFullscreen() } : null;
     },
     focus({ editorId }) {
       editorFor(editorId).focus();
@@ -84,7 +91,8 @@
       // Simple bookmarks don't insert marker elements in the saved document.
       const bookmark = editor.selection.getBookmark(2, true);
       while (sessions.size >= 32) sessions.delete(sessions.keys().next().value);
-      sessions.set(token, { editor, nodes, bookmark, content: editor.getContent(), created: Date.now() });
+      sessions.set(token, { editor, nodes, bookmark, content: editor.getContent(),
+        courseCode: pageInfo(editor).courseCode, created: Date.now() });
       return { token, components: nodes.map((element, index) => ({
         index, name: element.getAttribute("data-component"), props: ownProps(element),
       })) };
@@ -155,7 +163,7 @@
   const REQUEST = "mes-outils:tinymce:request";
   const RESPONSE = "mes-outils:tinymce:response";
   const pending = new Map();
-  const toolbars = new Map();
+  let toolbar;
   const labels = {
     "med-nbsp": "Espace insécable", "med-artefact": "Document Office", "med-artefact-pdf": "Document PDF",
     "med-boite": "Boîte", "med-forum": "Forum", "med-fullimg": "Image plein écran",
@@ -391,28 +399,25 @@
     if (scanning) return;
     scanning = true;
     try {
-      const editors = await rpc("list");
-      for (const [key, toolbar] of toolbars) if (!editors.some((editor) => editor.key === key)) {
-        toolbar.close(); toolbar.host.remove(); toolbars.delete(key);
+      const editor = await rpc("state");
+      if (toolbar && (!editor?.compatible || editor.key !== toolbar.editor.key)) {
+        toolbar.close(); toolbar.host.remove(); toolbar = null;
       }
-      for (const editor of editors) {
-        let toolbar = toolbars.get(editor.key);
-        if (!toolbar) {
-          toolbar = createToolbar(editor);
-          try { await toolbar.mount(); }
-          catch (failure) { toolbar.host.remove(); throw failure; }
-          toolbars.set(editor.key, toolbar);
-        }
-        toolbar.setState(editor);
+      if (!editor?.compatible) return;
+      if (!toolbar) {
+        const next = createToolbar(editor);
+        try { await next.mount(); }
+        catch (failure) { next.host.remove(); throw failure; }
+        toolbar = next;
       }
+      toolbar.setState(editor);
     } catch (failure) { console.warn("Composants CEL :", failure.message); }
     finally { scanning = false; }
   }
   const timer = setInterval(scan, 1500);
   window.__celComponentsPrototype = { stop() {
     clearInterval(timer);
-    for (const toolbar of toolbars.values()) { toolbar.close(); toolbar.host.remove(); }
-    toolbars.clear();
+    if (toolbar) { toolbar.close(); toolbar.host.remove(); toolbar = null; }
     window.removeEventListener(RESPONSE, receive);
     for (const task of pending.values()) { clearTimeout(task.timer); task.reject(new Error("Outil arrêté.")); }
     pending.clear();

@@ -75,7 +75,7 @@ def build(catalog_dir=None, domain="https://cforp.desire2learn.com"):
     header = f"""// ==UserScript==
 // @name Composants CEL — prototype
 // @namespace cel
-// @version 0.2.0
+// @version 0.3.1
 // @description Insérer les composants MED et modifier leurs options dans le WYSIWYG D2L.
 // @match https://{address.hostname}/*
 // @grant none

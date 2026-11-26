@@ -70,14 +70,85 @@ try {
 
   const page = await context.newPage();
   await page.goto("https://cforp.desire2learn.com/prototype/?extension=1");
-  await page.waitForFunction(() => tinymce.get().filter((editor) => editor.initialized).length === 2);
-  await page.locator("[data-cel-components-toolbar]").nth(1).waitFor({ timeout: 10000 });
+  await page.waitForFunction(() => tinymce.get().filter((editor) => editor.initialized).length === 1);
+  await page.locator("[data-cel-components-toolbar]").waitFor({ timeout: 10000 });
   const toolbar = page.locator('[data-cel-editor-id="demo-editor"]');
-  const secondToolbar = page.locator('[data-cel-editor-id="demo-second"]');
   assert.equal(await toolbar.count(), 1);
-  assert.equal(await page.locator("[data-cel-components-toolbar]").count(), 2);
+  assert.equal(await page.locator("[data-cel-components-toolbar]").count(), 1);
   assert.equal(await page.evaluate(() => typeof window.__celComponentsPrototype?.stop), "function", "le script est exécuté dans le contexte de la page");
-  results.push("Deux éditeurs, dont un dans un Shadow DOM, avec exécution MAIN et CSP restrictive");
+  results.push("Un seul éditeur et un seul menu, avec exécution MAIN et CSP restrictive");
+  assert.equal(await toolbar.locator(".badge").textContent(), "Prototype · MED");
+  const detection = await page.evaluate(async () => {
+    const request = (op, data = {}) => new Promise((resolve) => {
+      const id = crypto.randomUUID();
+      const receive = (event) => {
+        const response = JSON.parse(event.detail);
+        if (response.id === id) { window.removeEventListener("mes-outils:tinymce:response", receive); resolve(response); }
+      };
+      window.addEventListener("mes-outils:tinymce:response", receive);
+      window.dispatchEvent(new CustomEvent("mes-outils:tinymce:request", { detail: JSON.stringify({ id, op, ...data }) }));
+    });
+    // Neither the host page nor a copied component can identify an editor's page.
+    Object.assign(document.body.dataset, { celTemplate: "handlebars", celTemplateVersion: "1", celCourseCode: "HOST" });
+    const editor = tinymce.get("demo-editor");
+    const originalContent = editor.getContent();
+    editor.setContent('<div data-cel-template="handlebars" data-cel-template-version="1" data-cel-course-code="COPIED"><p>Composant copié</p></div>');
+    const body = editor.getBody();
+    body.removeAttribute("data-cel-template");
+    const absent = await request("capture", { editorId: editor.id });
+    body.dataset.celTemplate = "other"; body.dataset.celTemplateVersion = "1";
+    const other = await request("capture", { editorId: editor.id });
+    body.dataset.celTemplate = "handlebars";
+    body.removeAttribute("data-cel-template-version");
+    const unversioned = await request("capture", { editorId: editor.id });
+    await request("release", { token: unversioned.result.token });
+    body.dataset.celTemplateVersion = "2";
+    const future = await request("capture", { editorId: editor.id });
+    await request("release", { token: future.result.token });
+    body.dataset.celTemplateVersion = "1"; body.dataset.celCourseCode = "PROBE";
+    editor.focus(); editor.selection.select(body, true); editor.selection.collapse(false);
+    const capture = await request("capture", { editorId: editor.id });
+    const before = editor.getContent();
+    body.dataset.celTemplate = "other";
+    const changedTemplate = await request("insert", { token: capture.result.token, html: "<p>Insertion interdite</p>" });
+    body.dataset.celTemplate = "handlebars"; body.dataset.celCourseCode = "OTHER";
+    const changedCourse = await request("insert", { token: capture.result.token, html: "<p>Insertion interdite</p>" });
+    body.dataset.celCourseCode = "PROBE";
+    await request("release", { token: capture.result.token });
+    return { absent, other, unversioned, future, changedTemplate, changedCourse, originalContent,
+      unchanged: before === editor.getContent(), state: (await request("state")).result };
+  });
+  for (const name of ["absent", "other", "changedTemplate"]) {
+    assert.equal(detection[name].ok, false, name);
+    assert.match(detection[name].error, /template Handlebars/, name);
+  }
+  assert.equal(detection.unversioned.ok, true);
+  assert.equal(detection.future.ok, true);
+  assert.equal(detection.changedCourse.ok, false);
+  assert.match(detection.changedCourse.error, /contenu a changé/);
+  assert.equal(detection.unchanged, true);
+  assert.equal(detection.state.compatible, true);
+  assert.equal(detection.state.courseCode, "PROBE");
+  const probeToolbar = toolbar;
+  await probeToolbar.waitFor();
+  assert.equal(await probeToolbar.locator(".badge").textContent(), "Prototype · MED");
+  await page.evaluate(() => tinymce.get("demo-editor").getBody().dataset.celTemplate = "other");
+  await probeToolbar.waitFor({ state: "detached" });
+  await page.evaluate(() => tinymce.get("demo-editor").getBody().dataset.celTemplate = "handlebars");
+  await probeToolbar.waitFor();
+  await page.evaluate(() => {
+    tinymce.get("demo-editor").getBody().removeAttribute("data-cel-template");
+  });
+  await probeToolbar.waitFor({ state: "detached" });
+  await page.evaluate((html) => {
+    const editor = tinymce.get("demo-editor");
+    editor.setContent(html);
+    editor.undoManager.reset();
+    Object.assign(editor.getBody().dataset, { celTemplate: "handlebars", celTemplateVersion: "1", celCourseCode: "HFN1O" });
+    for (const attribute of ["data-cel-template", "data-cel-template-version", "data-cel-course-code"]) document.body.removeAttribute(attribute);
+  }, detection.originalContent);
+  await toolbar.waitFor();
+  results.push("Détection Handlebars sur le body de l’éditeur, signatures copiées ignorées, version non vérifiée, cote non affichée et mutations protégées");
   async function end(id = "demo-editor") {
     await page.evaluate((id) => { const editor = tinymce.get(id); editor.focus(); editor.selection.select(editor.getBody(), true); editor.selection.collapse(false); }, id);
   }
@@ -138,31 +209,28 @@ try {
   assert.equal(new Set(allIds).size, 2);
   results.push("Bouton et modale insérés ensemble, UUID partagé et unique par insertion");
 
-  await end("demo-second");
-  const firstBeforeSecond = await content();
-  await insert("Colonnes 1/2 – 1/2", undefined, secondToolbar);
-  assert.equal(await content(), firstBeforeSecond);
-  assert.match(await page.evaluate(() => tinymce.get("demo-second").getContent()), /data-component="grid"/);
-  results.push("Insertion dans le bon éditeur sans modifier l’autre");
+  await end();
+  await insert("Colonnes 1/2 – 1/2");
+  assert.match(await content(), /data-component="grid"/);
 
   await page.evaluate(() => {
-    const editor = tinymce.get("demo-second");
+    const editor = tinymce.get("demo-editor");
     editor.focus(); editor.selection.select(editor.getBody().querySelector('[data-slot="column1"]'), true); editor.selection.collapse(false);
   });
-  await insert("Lecteur JWPlayer", undefined, secondToolbar);
+  await insert("Lecteur JWPlayer");
   await page.evaluate(() => {
-    const editor = tinymce.get("demo-second");
+    const editor = tinymce.get("demo-editor");
     const nested = editor.getBody().querySelector('[data-component="grid"] [data-component="jwplayer"]');
     nested.setAttribute("data-prop-extra", "conserver");
     editor.focus(); editor.selection.select(nested.querySelector('[data-slot="copyrights"]'), true); editor.selection.collapse(false);
   });
-  await secondToolbar.getByRole("button", { name: "Options du composant…", exact: true }).click();
-  assert.deepEqual(await secondToolbar.getByLabel("Composant à modifier").locator("option").allTextContents(), ["jwplayer", "grid"]);
-  await secondToolbar.getByLabel("Masquer la description").selectOption("true");
-  await secondToolbar.getByRole("button", { name: "Enregistrer", exact: true }).click();
-  await secondToolbar.locator("dialog").waitFor({ state: "hidden" });
+  await toolbar.getByRole("button", { name: "Options du composant…", exact: true }).click();
+  assert.deepEqual(await toolbar.getByLabel("Composant à modifier").locator("option").allTextContents(), ["jwplayer", "grid"]);
+  await toolbar.getByLabel("Masquer la description").selectOption("true");
+  await toolbar.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  await toolbar.locator("dialog").waitFor({ state: "hidden" });
   const nestedProps = await page.evaluate(() => {
-    const node = tinymce.get("demo-second").getBody().querySelector('[data-component="grid"] [data-component="jwplayer"]');
+    const node = tinymce.get("demo-editor").getBody().querySelector('[data-component="grid"] [data-component="jwplayer"]');
     return [node.getAttribute("data-prop-hidedescription"), node.getAttribute("data-prop-extra")];
   });
   assert.deepEqual(nestedProps, ["true", "conserver"]);
@@ -187,7 +255,7 @@ try {
       window.addEventListener("mes-outils:tinymce:response", receive);
       window.dispatchEvent(new CustomEvent("mes-outils:tinymce:request", { detail: JSON.stringify({ id, op, ...data }) }));
     });
-    const editor = tinymce.get("demo-second");
+    const editor = tinymce.get("demo-editor");
     editor.focus(); editor.selection.select(editor.getBody().querySelector('[data-slot="column1"]'), true);
     const capture = await request("capture", { editorId: editor.id });
     const structure = await request("update", { token: capture.result.token, index: 0, props: { "data-prop-type": "triple" } });
@@ -218,11 +286,8 @@ try {
   results.push("Menu masqué en lecture seule et en plein écran, restauré au retour");
 
   // Check every author snippet through the same insertion UI and TinyMCE parser.
-  await page.evaluate(async () => {
-    const target = document.createElement("textarea"); target.id = "catalog-validation"; document.body.append(target);
-    await tinymce.init({ target, license_key: "gpl", menubar: false, promotion: false, height: 250 });
-  });
-  const catalogToolbar = page.locator('[data-cel-editor-id="catalog-validation"]');
+  const beforeCatalog = await content();
+  const catalogToolbar = toolbar;
   await catalogToolbar.waitFor();
   const catalogEntries = [
     ["Espace insécable", "nbsp"], ["Document Office", "artefact"], ["Document PDF", "artefact"],
@@ -234,10 +299,10 @@ try {
   ];
   const snapshot = JSON.parse(await readFile(resolve(root, "catalog.generated.json"), "utf8")).components;
   for (const [label, name] of catalogEntries) {
-    await page.evaluate(() => { const editor = tinymce.get("catalog-validation"); editor.setContent("<p>Test du catalogue</p>"); editor.undoManager.reset(); });
-    await end("catalog-validation");
+    await page.evaluate(() => { const editor = tinymce.get("demo-editor"); editor.setContent("<p>Test du catalogue</p>"); editor.undoManager.reset(); });
+    await end();
     await insert(label, undefined, catalogToolbar);
-    const serialized = await page.evaluate(() => tinymce.get("catalog-validation").getContent());
+    const serialized = await content();
     assert.match(serialized, new RegExp(`data-component="${name}"`), label);
     const snippet = Object.values(snapshot).find((entry) => entry.name === name).html;
     const slots = [...snippet.matchAll(/data-slot="([^"]+)"/g)].map((match) => match[1]);
@@ -248,13 +313,15 @@ try {
     }
   }
   results.push("Les 19 choix du catalogue traversent le parseur TinyMCE avec leurs slots");
-  await page.evaluate(() => tinymce.get("catalog-validation").remove());
+  await page.evaluate(() => tinymce.get("demo-editor").remove());
   await catalogToolbar.waitFor({ state: "detached" });
-  await page.evaluate(async () => { await tinymce.init({ target: document.getElementById("catalog-validation"), license_key: "gpl", menubar: false, promotion: false, height: 250 }); });
+  await page.evaluate(async () => {
+    await tinymce.init({ target: document.getElementById("demo-editor"), license_key: "gpl", menubar: false, promotion: false, height: 430 });
+    Object.assign(tinymce.get("demo-editor").getBody().dataset, { celTemplate: "handlebars", celTemplateVersion: "1", celCourseCode: "HFN1O" });
+  });
   await catalogToolbar.waitFor();
   assert.equal(await catalogToolbar.count(), 1);
-  await page.evaluate(() => { tinymce.get("catalog-validation").remove(); document.getElementById("catalog-validation").remove(); });
-  await catalogToolbar.waitFor({ state: "detached" });
+  await page.evaluate((html) => tinymce.get("demo-editor").setContent(html), beforeCatalog);
   results.push("Éditeur supprimé puis recréé avec le même identifiant sans doublon");
 
   await end();
@@ -278,7 +345,7 @@ try {
   assert.equal(await options.locator('[data-action="check"]').count(), 0);
   const localPage = await context.newPage();
   await localPage.goto("https://cforp.desire2learn.com/prototype/?extension=1");
-  await localPage.locator("[data-cel-components-toolbar]").nth(1).waitFor();
+  await localPage.locator("[data-cel-components-toolbar]").waitFor();
   assert.equal(await localPage.evaluate(() => typeof window.__celComponentsPrototype?.stop), "function");
   // Explicit local replacement accepts unchanged @version and keeps the same card.
   await options.locator("#script-file").setInputFiles({ name: "composants-modifies.js", mimeType: "text/javascript",
@@ -296,12 +363,12 @@ try {
   await options.waitForFunction(() => !document.body.hasAttribute("aria-busy"));
   const standalone = await context.newPage();
   await standalone.goto("https://cforp.desire2learn.com/prototype/?extension=1");
-  await standalone.waitForFunction(() => tinymce.get().filter((editor) => editor.initialized).length === 2);
+  await standalone.waitForFunction(() => tinymce.get().filter((editor) => editor.initialized).length === 1);
   assert.equal(await standalone.locator("[data-cel-components-toolbar]").count(), 0);
   await standalone.addScriptTag({ url: "https://cforp.desire2learn.com/prototype-console.js" });
-  await standalone.locator("[data-cel-components-toolbar]").nth(1).waitFor();
+  await standalone.locator("[data-cel-components-toolbar]").waitFor();
   await standalone.addScriptTag({ url: "https://cforp.desire2learn.com/prototype-console.js" });
-  assert.equal(await standalone.locator("[data-cel-components-toolbar]").count(), 2);
+  assert.equal(await standalone.locator("[data-cel-components-toolbar]").count(), 1);
   const standaloneToolbar = standalone.locator('[data-cel-editor-id="demo-editor"]');
   await standalone.evaluate(() => { const editor = tinymce.get("demo-editor"); editor.focus(); editor.selection.select(editor.getBody(), true); editor.selection.collapse(false); });
   await standaloneToolbar.locator("summary").click();

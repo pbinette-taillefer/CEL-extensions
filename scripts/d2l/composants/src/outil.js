@@ -4,7 +4,7 @@
   const REQUEST = "mes-outils:tinymce:request";
   const RESPONSE = "mes-outils:tinymce:response";
   const pending = new Map();
-  const toolbars = new Map();
+  let toolbar;
   const labels = {
     "med-nbsp": "Espace insécable", "med-artefact": "Document Office", "med-artefact-pdf": "Document PDF",
     "med-boite": "Boîte", "med-forum": "Forum", "med-fullimg": "Image plein écran",
@@ -240,28 +240,25 @@
     if (scanning) return;
     scanning = true;
     try {
-      const editors = await rpc("list");
-      for (const [key, toolbar] of toolbars) if (!editors.some((editor) => editor.key === key)) {
-        toolbar.close(); toolbar.host.remove(); toolbars.delete(key);
+      const editor = await rpc("state");
+      if (toolbar && (!editor?.compatible || editor.key !== toolbar.editor.key)) {
+        toolbar.close(); toolbar.host.remove(); toolbar = null;
       }
-      for (const editor of editors) {
-        let toolbar = toolbars.get(editor.key);
-        if (!toolbar) {
-          toolbar = createToolbar(editor);
-          try { await toolbar.mount(); }
-          catch (failure) { toolbar.host.remove(); throw failure; }
-          toolbars.set(editor.key, toolbar);
-        }
-        toolbar.setState(editor);
+      if (!editor?.compatible) return;
+      if (!toolbar) {
+        const next = createToolbar(editor);
+        try { await next.mount(); }
+        catch (failure) { next.host.remove(); throw failure; }
+        toolbar = next;
       }
+      toolbar.setState(editor);
     } catch (failure) { console.warn("Composants CEL :", failure.message); }
     finally { scanning = false; }
   }
   const timer = setInterval(scan, 1500);
   window.__celComponentsPrototype = { stop() {
     clearInterval(timer);
-    for (const toolbar of toolbars.values()) { toolbar.close(); toolbar.host.remove(); }
-    toolbars.clear();
+    if (toolbar) { toolbar.close(); toolbar.host.remove(); toolbar = null; }
     window.removeEventListener(RESPONSE, receive);
     for (const task of pending.values()) { clearTimeout(task.timer); task.reject(new Error("Outil arrêté.")); }
     pending.clear();

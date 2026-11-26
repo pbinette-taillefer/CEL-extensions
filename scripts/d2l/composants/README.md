@@ -2,7 +2,7 @@
 
 Outil autonome pour le WYSIWYG de `https://cforp.desire2learn.com/` :
 
-- dropdown **Composants CEL** juste au-dessus de chaque éditeur;
+- dropdown **Composants CEL** juste au-dessus de l’unique éditeur de la page Handlebars;
 - 19 choix d’insertion issus des 20 fragments du catalogue MED (bouton et modale sont réunis);
 - formulaire **Options du composant…**, y compris depuis un slot ou un composant imbriqué;
 - conservation du contenu des slots et des props non exposées;
@@ -38,12 +38,27 @@ Utiliser un seul mode à la fois : snippet temporaire **ou** installation Mes ou
 3. Examiner l’aperçu **Contexte de la page**, confirmer et autoriser le domaine D2L.
 4. Actualiser la page D2L après avoir enregistré le travail en cours.
 
-Le domaine d’exécution est limité à `cforp.desire2learn.com`. Le script 0.2.0 déclare
+Le domaine d’exécution est limité à `cforp.desire2learn.com`. Le script 0.3.1 déclare
 `@inject-into page` et contient son propre adaptateur TinyMCE. Mes outils reste
 générique. Pour modifier la copie locale, réimporter le fichier; le disque n’est pas
 surveillé. L’ajout par URL HTTPS directe reste disponible pour une distribution CDN.
 Si l’ancien prototype était installé depuis une URL, le désinstaller avant de
 passer à une copie locale.
+
+## Reconnaissance du template
+
+Le script gère un seul éditeur TinyMCE par page et lit son `<body>`. Le menu
+apparaît seulement si ce corps porte `data-cel-template="handlebars"`. Une signature sur un `div`,
+sur un composant copié ou sur l’interface D2L ne suffit pas.
+
+La version du template n’est pas vérifiée. La cote du cours n’est pas affichée
+et son absence n’empêche pas l’utilisation du menu. Si elle change pendant
+l’ouverture d’un formulaire, il faut rouvrir celui-ci avant d’enregistrer.
+
+La détection est actualisée avec l’état de l’éditeur : retirer la signature
+retire le menu, l’ajouter le rend disponible. Le template est aussi revérifié
+avant chaque insertion ou modification. Les anciennes pages doivent recevoir
+`data-cel-template="handlebars"` sur leur `<body>` pour utiliser cet outil.
 
 ## Options disponibles
 
@@ -128,3 +143,10 @@ Vérifications du 25 novembre 2026 : contrôles statiques, 33 tests JavaScript e
 un dans un Shadow DOM, les composants imbriqués et le mode autonome. Les paquets
 Mes outils 0.2.0 ont été construits pour Chrome, Edge et Firefox. Le parcours
 navigateur a été exécuté dans Chromium; Edge et Firefox restent à essayer.
+
+Vérifications du 26 novembre 2026 pour le script **0.3.1** : contrôles statiques,
+33 tests JavaScript et 3 tests Python réussis; parcours Chromium complet réussi
+avec TinyMCE 8.4.0 et un seul éditeur par page. La détection distingue son corps de
+l’interface D2L et des composants copiés, accepte les versions absentes ou
+différentes, masque le menu après retrait de la signature et bloque les mutations
+si le template change pendant l’ouverture du formulaire. La cote reste invisible.
